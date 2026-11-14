@@ -1,0 +1,113 @@
+import 'dart:async';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'api/api_client.dart';
+import 'api/models.dart';
+import 'data/cache.dart';
+import 'data/cache_factory.dart';
+import 'data/sync_runner.dart';
+
+final apiClientProvider = Provider<ApiClient>(
+  (ref) => ApiClient(Supabase.instance.client),
+);
+
+final localStoreProvider = FutureProvider<LocalStore>(
+  (ref) => openLocalStore(),
+);
+
+final syncRunnerProvider = FutureProvider<SyncRunner>((ref) async {
+  final api = ref.watch(apiClientProvider);
+  final store = await ref.watch(localStoreProvider.future);
+  return SyncRunner(api, store);
+});
+
+final meProvider = FutureProvider.autoDispose<Me>(
+  (ref) => ref.watch(apiClientProvider).me(),
+);
+
+final sectionsProvider = FutureProvider<List<Section>>((ref) async {
+  final api = ref.watch(apiClientProvider);
+  final store = await ref.watch(localStoreProvider.future);
+  final runner = await ref.watch(syncRunnerProvider.future);
+
+  // Keep the mirror warm in the background; failures surface through the
+  // online call or are retried on the next refresh.
+  final mirror = runner.pullAll();
+  unawaited(mirror.then((_) {}, onError: (Object _) {}));
+
+  try {
+    return await api.sections();
+  } on Exception {
+    await mirror.then((_) {}, onError: (Object _) {});
+    final cached = await store.readTable('sections');
+    if (cached != null && cached.isNotEmpty) {
+      return [for (final row in cached) Section.fromJson(row)];
+    }
+    rethrow;
+  }
+});
+
+final periodsProvider = FutureProvider.autoDispose<List<Period>>((ref) async {
+  final api = ref.watch(apiClientProvider);
+  try {
+    return await api.periods();
+  } on Exception {
+    final store = await ref.watch(localStoreProvider.future);
+    final cached = await store.readTable('grading_periods');
+    if (cached != null && cached.isNotEmpty) {
+      return [for (final row in cached) Period.fromJson(row)];
+    }
+    rethrow;
+  }
+});
+
+final meetingsProvider = FutureProvider.autoDispose
+    .family<List<Meeting>, String>(
+      (ref, sectionId) => ref.watch(apiClientProvider).meetings(sectionId),
+    );
+
+final rosterProvider = FutureProvider.autoDispose
+    .family<List<RosterStudent>, String>(
+      (ref, sectionId) => ref.watch(apiClientProvider).roster(sectionId),
+    );
+
+typedef GradebookKey = ({String sectionId, String periodId});
+
+final gradebookProvider = FutureProvider.autoDispose
+    .family<Gradebook, GradebookKey>(
+      (ref, key) => ref
+          .watch(apiClientProvider)
+          .gradebook(key.sectionId, key.periodId),
+    );
+
+typedef AttendanceKey = ({String sectionId, String date});
+
+final attendanceProvider = FutureProvider.autoDispose
+    .family<List<AttendanceRecord>, AttendanceKey>((ref, key) async {
+      final api = ref.watch(apiClientProvider);
+      try {
+        return await api.attendance(key.sectionId, key.date);
+      } on Exception {
+        final store = await ref.watch(localStoreProvider.future);
+        final cached = await store.readTable('attendance');
+        final records = [
+          for (final row in cached ?? const <Map<String, dynamic>>[])
+            if (row['sectionId'] == key.sectionId && row['date'] == key.date)
+              AttendanceRecord.fromJson(row),
+        ];
+        if (records.isNotEmpty) return records;
+        rethrow;
+      }
+    });
+
+final notificationsProvider = FutureProvider.autoDispose<NotificationInbox>(
+  (ref) => ref.watch(apiClientProvider).notifications(),
+);
+
+// A 403 means the teacher has not started the class; retrying would loop.
+final joinProvider = FutureProvider.autoDispose.family<JoinResult, String>(
+  (ref, meetingId) => ref.watch(apiClientProvider).join(meetingId),
+  retry: (retryCount, error) => null,
+);

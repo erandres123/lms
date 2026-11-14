@@ -1,0 +1,33 @@
+{
+  "name": "lms",
+  "private": true,
+  "packageManager": "pnpm@12.18.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm build:shared && pnpm --filter @lms/api build && pnpm --filter @lms/web build",
+    "build:shared": "pnpm --filter @lms/shared build",
+    "dev:api": "pnpm --filter @lms/api start:dev",
+    "dev:web": "pnpm --filter @lms/web dev",
+    "lint": "eslint apps/api/src apps/api/test apps/web/src packages/shared/src",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "pnpm build:shared && pnpm --filter @lms/api test",
+    "test:e2e": "pnpm build:shared && pnpm --filter @lms/api test:e2e",
+    "test:integration": "pnpm build:shared && pnpm --filter @lms/api test:integration",
+    "db:generate": "pnpm --filter @lms/api db:generate",
+    "db:migrate": "pnpm --filter @lms/api db:migrate",
+    "db:local": "pnpm --filter @lms/api db:local",
+    "dev:token": "pnpm --filter @lms/api dev:token",
+    "demo:seed": "pnpm --filter @lms/api demo:seed"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.10",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.2"
+  }
+}
