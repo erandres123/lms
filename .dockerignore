@@ -1,0 +1,15 @@
+.git
+.dev
+.local
+.next
+node_modules
+**/node_modules
+**/dist
+apps/mobile
+**/build
+**/.dart_tool
+**/*.log
+**/.env
+**/.env.*
+!**/.env.example
+**/.secrets
