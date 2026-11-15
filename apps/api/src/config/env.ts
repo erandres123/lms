@@ -17,16 +17,14 @@ export const envSchema = z
           .filter(Boolean),
       ),
     LOG_LEVEL: z.enum(['error', 'warn', 'log', 'debug', 'verbose']).default('log'),
+    RETENTION_SCHEDULER: z.enum(['on', 'off']).default('on'),
     SUPABASE_URL: z.preprocess(emptyToUndefined, z.string().url().optional()),
     SUPABASE_JWT_SECRET: z.preprocess(emptyToUndefined, z.string().min(32).optional()),
     SUPABASE_JWT_AUDIENCE: z.string().min(1).default('authenticated'),
     LIVEKIT_URL: z.preprocess(emptyToUndefined, z.string().url().optional()),
     LIVEKIT_API_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
     LIVEKIT_API_SECRET: z.preprocess(emptyToUndefined, z.string().min(32).optional()),
-    FIREBASE_SERVICE_ACCOUNT_PATH: z.preprocess(
-      emptyToUndefined,
-      z.string().min(1).optional(),
-    ),
+    FIREBASE_SERVICE_ACCOUNT_PATH: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   })
   .refine(
     (env) => env.NODE_ENV !== 'production' || Boolean(env.SUPABASE_URL ?? env.SUPABASE_JWT_SECRET),

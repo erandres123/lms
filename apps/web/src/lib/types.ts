@@ -222,3 +222,155 @@ export interface NotificationInbox {
   items: NotificationItem[];
   unreadCount: number;
 }
+
+export interface AuditEntry {
+  id: string;
+  actorId: string | null;
+  actorEmail: string | null;
+  actorName: string | null;
+  action: string;
+  entity: string;
+  entityId: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface AuditPage {
+  entries: AuditEntry[];
+  nextCursor: string | null;
+  timeZone: string;
+}
+
+export interface StudentOption {
+  id: string;
+  userId: string | null;
+  firstName: string;
+  lastName: string;
+  lrn: string | null;
+  version: number;
+  createdAt: string;
+}
+
+export interface DsarExport {
+  generatedAt: string;
+  tenant: { id: string; name: string; timezone: string };
+  student: {
+    id: string;
+    userId: string | null;
+    firstName: string;
+    lastName: string;
+    lrn: string | null;
+    createdAt: string;
+    updatedAt: string;
+  };
+  account: { userId: string; email: string; displayName: string | null } | null;
+  enrollments: Array<{
+    sectionId: string;
+    sectionName: string;
+    gradeLevel: number;
+    schoolYear: string;
+    status: string;
+    enrolledAt: string;
+  }>;
+  attendance: Array<{
+    date: string;
+    sectionId: string;
+    sectionName: string;
+    status: string;
+    note: string | null;
+    recordedAt: string;
+  }>;
+  grades: Array<{
+    itemId: string;
+    itemTitle: string;
+    categoryName: string;
+    periodName: string;
+    sectionId: string;
+    sectionName: string;
+    score: number;
+    maxScore: number;
+    recordedAt: string;
+  }>;
+  gradeOverrides: Array<{
+    sectionId: string;
+    sectionName: string;
+    periodName: string;
+    grade: number;
+    reason: string;
+    createdAt: string;
+  }>;
+  notifications: Array<{
+    kind: string;
+    title: string;
+    body: string;
+    createdAt: string;
+    readAt: string | null;
+  }>;
+  pushDevices: Array<{ platform: string; createdAt: string; lastSeenAt: string }>;
+  meetingParticipation: Array<{
+    meetingId: string;
+    meetingTitle: string;
+    sectionName: string;
+    role: string;
+    firstJoinedAt: string;
+    lastLeftAt: string | null;
+    totalSeconds: number;
+  }>;
+}
+
+export type ErasureAction = 'anonymize' | 'delete' | 'retain';
+
+export interface ErasurePlan {
+  dryRun: true;
+  studentId: string;
+  generatedAt: string;
+  categories: Array<{
+    table: string;
+    label: string;
+    rows: number;
+    action: ErasureAction;
+    reason: string;
+  }>;
+  warnings: string[];
+}
+
+export type RetentionCategoryKey =
+  'notificationsReadDays' | 'staleDeviceDays' | 'processedEventDays' | 'syncReceiptDays';
+
+export interface RetentionPolicy {
+  runHour: number;
+  notificationsReadDays: number | null;
+  staleDeviceDays: number | null;
+  processedEventDays: number | null;
+  syncReceiptDays: number | null;
+}
+
+export interface RetentionSettings {
+  policy: RetentionPolicy;
+  version: number;
+  updatedAt: string | null;
+}
+
+export interface RetentionCategoryPlan {
+  key: RetentionCategoryKey;
+  label: string;
+  table: string;
+  enabled: boolean;
+  cutoff: string | null;
+  rows: number;
+}
+
+export interface RetentionRun {
+  id: string;
+  mode: 'dry_run';
+  triggeredBy: 'manual' | 'schedule';
+  totalRows: number;
+  categories: RetentionCategoryPlan[];
+  startedAt: string;
+  finishedAt: string | null;
+}
+
+export interface RetentionOverview {
+  settings: RetentionSettings;
+  runs: RetentionRun[];
+}

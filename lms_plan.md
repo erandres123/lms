@@ -353,7 +353,8 @@ Team assumption: 2–3 full-stack engineers + 0.5 DevOps. **Gate G0 at Week 4** 
 
 - [ ] Privacy notice in-app; guardian consent capture; DPA signed with the school.
 - [ ] Audit log viewer (admin) with filters: actor, entity, action, date.
-- [ ] Retention settings UI + nightly job (dry-run mode for pilot).
+- [x] Retention settings UI + nightly job (dry-run mode for pilot).
+  - Versioned `tenant_settings` row (`retention.policy`) holds admin-entered day windows for read notifications, stale push devices, processed meeting events, and sync receipts; blank means keep forever, and academic records are never in scope. `GET|PUT /v1/retention` (admin, optimistic version, 409 on stale) and `POST /v1/retention/dry-run`; a scheduler runs once per tenant-local day at the configured hour and writes a `retention_runs` ledger plus `retention.policy_updated` / `retention.dry_run` audit entries. Nothing is deleted yet; the retention integration suite proves counts, no-delete, tenant isolation, and once-per-day scheduling.
 - [ ] DSAR export for one test student; erasure dry-run.
 - [ ] Backup + restore drill executed and timed.
 - [ ] Teacher training session (90 minutes) + one-page cheat sheet.

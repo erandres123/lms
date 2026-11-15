@@ -57,6 +57,27 @@ export const userTenants = pgTable(
   ],
 );
 
+/**
+ * Versioned, admin-editable tenant configuration. Governance values live here
+ * so policy changes are auditable and never hard-coded in the application.
+ */
+export const tenantSettings = pgTable(
+  'tenant_settings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    key: text('key').notNull(),
+    value: jsonb('value').$type<Record<string, unknown>>().notNull().default({}),
+    version: integer('version').notNull().default(1),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex('tenant_settings_tenant_key_key').on(table.tenantId, table.key)],
+);
+
 export const auditLog = pgTable(
   'audit_log',
   {

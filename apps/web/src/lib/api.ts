@@ -1,7 +1,10 @@
 import type {
   AttendanceSheet,
   AttendanceStatus,
+  AuditPage,
   CompetencyReport,
+  DsarExport,
+  ErasurePlan,
   Gradebook,
   JoinMeetingResult,
   Me,
@@ -11,9 +14,14 @@ import type {
   NotificationInbox,
   NotificationItem,
   Period,
+  RetentionOverview,
+  RetentionPolicy,
+  RetentionRun,
+  RetentionSettings,
   RosterImportReport,
   Section,
   SectionRoster,
+  StudentOption,
 } from './types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/v1';
@@ -190,6 +198,48 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ platform: 'web', token: deviceToken }),
     }),
+  audit: (
+    token: string,
+    filters: {
+      actorId?: string;
+      action?: string;
+      entity?: string;
+      entityId?: string;
+      from?: string;
+      to?: string;
+      cursor?: string;
+      limit?: number;
+    } = {},
+  ) => {
+    const search = new URLSearchParams();
+    for (const key of [
+      'actorId',
+      'action',
+      'entity',
+      'entityId',
+      'from',
+      'to',
+      'cursor',
+    ] as const) {
+      const value = filters[key];
+      if (value) search.set(key, value);
+    }
+    if (filters.limit) search.set('limit', String(filters.limit));
+    return request<AuditPage>(`/audit?${search.toString()}`, token);
+  },
+  students: (token: string) => request<StudentOption[]>('/students', token),
+  dsarExport: (token: string, studentId: string) =>
+    request<DsarExport>(`/privacy/students/${studentId}/export`, token),
+  erasureDryRun: (token: string, studentId: string) =>
+    request<ErasurePlan>(`/privacy/students/${studentId}/erasure-dry-run`, token),
+  retention: (token: string) => request<RetentionOverview>('/retention', token),
+  saveRetention: (token: string, policy: RetentionPolicy, version: number) =>
+    request<RetentionSettings>('/retention', token, {
+      method: 'PUT',
+      body: JSON.stringify({ policy, version }),
+    }),
+  retentionDryRun: (token: string) =>
+    request<RetentionRun>('/retention/dry-run', token, { method: 'POST' }),
   syncPush: (
     token: string,
     body: {

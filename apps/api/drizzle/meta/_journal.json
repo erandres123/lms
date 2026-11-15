@@ -92,6 +92,20 @@
       "when": 1794664600000,
       "tag": "0012_sync_operations_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1794703813000,
+      "tag": "0013_cultured_champions",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1794703813001,
+      "tag": "0014_tenant_settings_retention_rls",
+      "breakpoints": true
     }
   ]
 }
