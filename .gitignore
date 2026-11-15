@@ -11,6 +11,7 @@ coverage/
 .dev/
 .local/
 .next/
+apps/web/out/
 *.tsbuildinfo
 apps/mobile/build/
 apps/mobile/.dart_tool/

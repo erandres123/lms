@@ -229,7 +229,7 @@ Bandwidth policy from day one: **student cameras off, teacher video max 720p, sc
 
 | Layer | Host | Tier | Notes |
 |---|---|---|---|
-| Web (Next.js) | **Cloudflare Pages** | Free | Client-heavy portal + static assets; 100k requests/day. SSR on Workers has a 10 ms CPU limit on the free plan — keep the portal client-rendered. |
+| Web (Next.js) | **Cloudflare Pages** | Free | Static export of a client-heavy portal; static requests are unmetered (Functions and Workers are not). SSR on Workers has a 10 ms CPU limit on the free plan — keep the portal client-rendered. |
 | API (NestJS) | **Hetzner CX33** | ~€8.50/mo | Cloudflare Workers cannot host NestJS: no long-lived processes, no BullMQ workers, no sustained Postgres pool. This piece is not free. |
 | Database / Auth / Storage | **Supabase Cloud** | Free → Pro | Free tier pauses after ~7 days of inactivity; move to Pro before real student data. |
 | Live classes | **Hetzner CCX23 + coturn** | ~€27–35/mo | Stage 0; Scalelite later. |

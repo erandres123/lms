@@ -1,4 +1,0 @@
-{
-  "framework": "nextjs",
-  "buildCommand": "pnpm --filter @lms/shared build && pnpm --filter @lms/web build"
-}

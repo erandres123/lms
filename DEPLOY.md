@@ -1,7 +1,8 @@
 # Deploy
 
-Two projects: the Next.js teacher portal on Vercel, the NestJS API on Render.
-Supabase stays the only database (no database is deployed here).
+Two projects: the Next.js teacher portal on Cloudflare Pages (static export),
+the NestJS API on Render. Supabase stays the only database (no database is
+deployed here).
 
 ## API (Render, Docker)
 
@@ -22,7 +23,7 @@ Environment:
 | `SUPABASE_URL`                                         | `https://<project-ref>.supabase.co`                                     |
 | `SUPABASE_JWT_AUDIENCE`                                | `authenticated`                                                         |
 | `SUPABASE_SERVICE_ROLE_KEY`                            | Supabase service role key; required for guardian account provisioning    |
-| `CORS_ORIGINS`                                         | the Vercel production URL, comma-separated if there are more            |
+| `CORS_ORIGINS`                                         | the Pages production URL, comma-separated if there are more             |
 | `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | LiveKit project (omit all three to disable live classes)                |
 | `FIREBASE_SERVICE_ACCOUNT_PATH`                        | `/etc/secrets/firebase-service-account.json`                            |
 | `LOG_LEVEL`                                            | `log`                                                                   |
@@ -43,13 +44,23 @@ first deploy:
 pnpm --filter @lms/api db:migrate
 ```
 
-## Web (Vercel)
+Render free is the pilot arrangement. The plan's production target is a small
+Hetzner box; the same Dockerfile runs there, and it avoids the free-plan sleep
+between class periods.
 
-Import the repo as a Vercel project with:
+## Web (Cloudflare Pages)
 
-- Root Directory: `apps/web`
-- Framework: Next.js (`apps/web/vercel.json` supplies the shared-package build
-  step so `@lms/shared` is compiled before `next build`)
+Every portal screen is a client component, so the app builds to static files
+(`output: 'export'`) and needs no Node runtime. Connect the repo as a Pages
+project with:
+
+- Root directory: repository root
+- Build command: `pnpm --filter @lms/shared build && pnpm --filter @lms/web build`
+- Build output directory: `apps/web/out`
+
+Pages installs with the pnpm version from `packageManager`; if the build log
+reports a mismatch, set `PNPM_VERSION` to that same version in the project
+environment.
 
 Environment (public browser config, mirror `apps/web/.env.local`):
 `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`,
@@ -59,14 +70,26 @@ Environment (public browser config, mirror `apps/web/.env.local`):
 `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`, `NEXT_PUBLIC_FIREBASE_APP_ID`,
 `NEXT_PUBLIC_FIREBASE_VAPID_KEY`.
 
-After Vercel assigns the domain, put that origin in the API's `CORS_ORIGINS`
+These are compiled into the bundle at build time, so changing one means a
+rebuild. Nothing secret belongs in them; the API URL comes from the mobile app's
+`env.json`, not the portal.
+
+`next build` emits `live-join.html`, which Pages serves at `/live-join` without
+extra rules. If the portal ever moves to Firebase Hosting, add
+`"cleanUrls": true` to `firebase.json` and stay under the Spark transfer cap
+(360 MB/day).
+
+After Pages assigns the domain, put that origin in the API's `CORS_ORIGINS`
 and redeploy the API. Then update `apps/mobile/env.json`
 (`API_BASE_URL`, `WEB_BASE_URL`) for the student app build.
 
 ## Free-tier caveats
 
-- Vercel Hobby is for non-commercial use. Running the pilot for a paying school
-  needs Vercel Pro (or another host) before invoicing.
+- Cloudflare Pages free allows commercial use, meters no static requests, and
+  caps builds at 500/month. That fits a school portal with room to spare.
+- Firebase Hosting's Spark plan stops at 360 MB/day of transfer (about 10 GB a
+  month) and does not offer App Hosting without Blaze billing, so it is the
+  fallback only.
 - Render free web services sleep and have 512 MB RAM / 0.1 CPU. Fine for a
   pilot demo, not for a class-period rush.
 - Supabase free tier is the real limit: 500 MB database, 50k monthly active
