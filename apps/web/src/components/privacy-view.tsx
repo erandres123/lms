@@ -21,12 +21,22 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material/Select';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
-import type { ErasurePlan, StudentOption } from '@/lib/types';
+import type {
+  ConsentRecord,
+  ConsentStatus,
+  ErasurePlan,
+  PrivacyNotice,
+  PrivacyNoticeSettings,
+  StudentOption,
+} from '@/lib/types';
 
 const messageOf = (error: unknown) =>
   error instanceof Error ? error.message : 'Something went wrong';
@@ -38,6 +48,32 @@ const ACTION_COLOR: Record<
   anonymize: 'warning',
   delete: 'error',
   retain: 'default',
+};
+
+const DRAFT_NOTICE: PrivacyNotice = {
+  title: 'DRAFT privacy notice — replace before launch',
+  body: `DRAFT TEMPLATE. This text is not legal advice. Replace every section with the school's official privacy notice before any real student data is collected.
+
+1. Who we are
+[School name, address, and privacy contact]
+
+2. What we collect
+Student name, learner reference number, attendance, grades, class participation, school email, and push-device tokens.
+
+3. Why we process it
+[Purpose of processing and the legal basis the school relies on]
+
+4. Who can see it
+[School staff roles with access, plus any processors such as hosting and video providers]
+
+5. How long we keep it
+[Retention schedule per record type]
+
+6. Your rights
+[Access, correction, erasure, objection, and how to exercise them]
+
+7. Contact and complaints
+[Data protection officer and the regulator to complain to]`,
 };
 
 function downloadJson(filename: string, value: unknown) {
@@ -53,26 +89,37 @@ function downloadJson(filename: string, value: unknown) {
 export function PrivacyView({ token }: { token: string }) {
   const [students, setStudents] = useState<StudentOption[]>([]);
   const [studentId, setStudentId] = useState('');
-  const [loadingStudents, setLoadingStudents] = useState(true);
-  const [working, setWorking] = useState<'export' | 'plan' | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [working, setWorking] = useState<'export' | 'plan' | 'notice' | 'consent' | null>(null);
   const [plan, setPlan] = useState<ErasurePlan | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [noticeSettings, setNoticeSettings] = useState<PrivacyNoticeSettings | null>(null);
+  const [noticeDraft, setNoticeDraft] = useState<PrivacyNotice>(DRAFT_NOTICE);
+  const [consents, setConsents] = useState<ConsentRecord[]>([]);
+  const [guardianName, setGuardianName] = useState('');
+  const [guardianRelationship, setGuardianRelationship] = useState('Parent');
+  const [guardianContact, setGuardianContact] = useState('');
+  const [consentStatus, setConsentStatus] = useState<ConsentStatus>('granted');
+  const [consentNote, setConsentNote] = useState('');
+
   useEffect(() => {
     let cancelled = false;
-    api
-      .students(token)
-      .then((rows) => {
+    Promise.all([api.students(token), api.privacyConsents(token)])
+      .then(([rows, overview]) => {
         if (cancelled) return;
         setStudents(rows);
         setStudentId((current) => current || rows[0]?.id || '');
+        setNoticeSettings(overview.notice);
+        setNoticeDraft(overview.notice.notice ?? DRAFT_NOTICE);
+        setConsents(overview.consents);
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(messageOf(err));
       })
       .finally(() => {
-        if (!cancelled) setLoadingStudents(false);
+        if (!cancelled) setLoading(false);
       });
 
     return () => {
@@ -81,6 +128,66 @@ export function PrivacyView({ token }: { token: string }) {
   }, [token]);
 
   const student = students.find((row) => row.id === studentId);
+  const noticeSaved = Boolean(noticeSettings?.notice);
+
+  const saveNotice = async () => {
+    if (!noticeDraft.title.trim() || !noticeDraft.body.trim()) {
+      setError('A title and body are required.');
+      return;
+    }
+    setWorking('notice');
+    setError(null);
+    setNotice(null);
+    try {
+      const saved = await api.savePrivacyNotice(
+        token,
+        { title: noticeDraft.title.trim(), body: noticeDraft.body.trim() },
+        noticeSettings?.version ?? 0,
+      );
+      setNoticeSettings(saved);
+      setNoticeDraft(saved.notice ?? DRAFT_NOTICE);
+      setNotice(`Privacy notice saved as version ${saved.version}.`);
+    } catch (err: unknown) {
+      setError(messageOf(err));
+    } finally {
+      setWorking(null);
+    }
+  };
+
+  const captureConsent = async () => {
+    if (!student) return;
+    if (!noticeSaved) {
+      setError('Save the privacy notice before capturing consent.');
+      return;
+    }
+    if (!guardianName.trim() || !guardianRelationship.trim()) {
+      setError('Guardian name and relationship are required.');
+      return;
+    }
+    setWorking('consent');
+    setError(null);
+    setNotice(null);
+    try {
+      const record = await api.captureConsent(token, student.id, {
+        guardianName: guardianName.trim(),
+        guardianRelationship: guardianRelationship.trim(),
+        guardianContact: guardianContact.trim() || null,
+        status: consentStatus,
+        note: consentNote.trim() || null,
+      });
+      setConsents((rows) => [record, ...rows]);
+      setGuardianName('');
+      setGuardianContact('');
+      setConsentNote('');
+      setNotice(
+        `Consent (${consentStatus}) recorded for ${record.studentName} against notice version ${record.noticeVersion}.`,
+      );
+    } catch (err: unknown) {
+      setError(messageOf(err));
+    } finally {
+      setWorking(null);
+    }
+  };
 
   const exportStudent = async () => {
     if (!student) return;
@@ -116,15 +223,202 @@ export function PrivacyView({ token }: { token: string }) {
     }
   };
 
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
   return (
     <>
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+
+      {notice && (
+        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setNotice(null)}>
+          {notice}
+        </Alert>
+      )}
+
+      <Paper sx={{ p: 2, mb: 2 }}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1.5 }}>
+          <Typography variant="subtitle1">Privacy notice</Typography>
+          <Chip
+            size="small"
+            variant="outlined"
+            label={noticeSettings?.version ? `version ${noticeSettings.version}` : 'not saved'}
+          />
+          {!noticeSaved && (
+            <Chip size="small" color="warning" label="draft only — not shown to users" />
+          )}
+        </Stack>
+        <Stack spacing={2}>
+          <TextField
+            size="small"
+            label="Title"
+            value={noticeDraft.title}
+            onChange={(event) => setNoticeDraft((d) => ({ ...d, title: event.target.value }))}
+          />
+          <TextField
+            label="Notice text"
+            multiline
+            minRows={10}
+            value={noticeDraft.body}
+            onChange={(event) => setNoticeDraft((d) => ({ ...d, body: event.target.value }))}
+          />
+          <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+            <Button
+              variant="contained"
+              onClick={() => void saveNotice()}
+              disabled={working !== null}
+            >
+              {working === 'notice' ? 'Saving…' : 'Save notice'}
+            </Button>
+            <Typography variant="caption" color="text.secondary">
+              Saving creates a new version. Consent records stay pinned to the version the guardian
+              was given.
+            </Typography>
+          </Stack>
+        </Stack>
+      </Paper>
+
+      <Paper sx={{ p: 2, mb: 2 }}>
+        <Typography variant="subtitle1" sx={{ mb: 1.5 }}>
+          Guardian consent
+        </Typography>
+        <Stack spacing={2}>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+            <FormControl size="small" sx={{ minWidth: 240 }}>
+              <InputLabel id="consent-student-label">Student</InputLabel>
+              <Select
+                labelId="consent-student-label"
+                label="Student"
+                value={studentId}
+                onChange={(event: SelectChangeEvent) => setStudentId(event.target.value)}
+              >
+                {students.map((row) => (
+                  <MenuItem key={row.id} value={row.id}>
+                    {row.lastName}, {row.firstName}
+                    {row.lrn ? ` · LRN ${row.lrn}` : ''}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
+              size="small"
+              label="Guardian name"
+              value={guardianName}
+              onChange={(event) => setGuardianName(event.target.value)}
+              sx={{ minWidth: 220 }}
+            />
+            <TextField
+              size="small"
+              label="Relationship"
+              value={guardianRelationship}
+              onChange={(event) => setGuardianRelationship(event.target.value)}
+              sx={{ minWidth: 160 }}
+            />
+            <TextField
+              size="small"
+              label="Contact (optional)"
+              value={guardianContact}
+              onChange={(event) => setGuardianContact(event.target.value)}
+              sx={{ minWidth: 200 }}
+            />
+          </Stack>
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+            <ToggleButtonGroup
+              exclusive
+              size="small"
+              value={consentStatus}
+              onChange={(_event, value: ConsentStatus | null) => {
+                if (value) setConsentStatus(value);
+              }}
+            >
+              <ToggleButton value="granted">Granted</ToggleButton>
+              <ToggleButton value="withdrawn">Withdrawn</ToggleButton>
+            </ToggleButtonGroup>
+            <TextField
+              size="small"
+              label="Note (optional)"
+              value={consentNote}
+              onChange={(event) => setConsentNote(event.target.value)}
+              fullWidth
+            />
+            <Button
+              variant="contained"
+              onClick={() => void captureConsent()}
+              disabled={!student || working !== null || !noticeSaved}
+            >
+              {working === 'consent' ? 'Recording…' : 'Record consent'}
+            </Button>
+          </Stack>
+          <Typography variant="caption" color="text.secondary">
+            Captures are append-only and recorded in the audit log. Each record stores the notice
+            version the guardian was given.
+          </Typography>
+        </Stack>
+      </Paper>
+
+      <Paper sx={{ p: 2, mb: 2 }}>
+        <Typography variant="subtitle1" sx={{ mb: 1.5 }}>
+          Consent history
+        </Typography>
+        {consents.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            No consent captured yet.
+          </Typography>
+        ) : (
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Captured</TableCell>
+                  <TableCell>Student</TableCell>
+                  <TableCell>Guardian</TableCell>
+                  <TableCell>Relationship</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell align="right">Notice</TableCell>
+                  <TableCell>Recorded by</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {consents.map((row) => (
+                  <TableRow key={row.id} hover>
+                    <TableCell>{new Date(row.capturedAt).toLocaleString()}</TableCell>
+                    <TableCell>{row.studentName}</TableCell>
+                    <TableCell>{row.guardianName}</TableCell>
+                    <TableCell>{row.guardianRelationship}</TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        color={row.status === 'granted' ? 'success' : 'warning'}
+                        label={row.status}
+                      />
+                    </TableCell>
+                    <TableCell align="right">v{row.noticeVersion}</TableCell>
+                    <TableCell>{row.capturedByName ?? '—'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </Paper>
+
       <Paper sx={{ p: 2, mb: 2 }}>
         <Stack
           direction={{ xs: 'column', md: 'row' }}
           spacing={2}
           sx={{ alignItems: { md: 'center' } }}
         >
-          <FormControl size="small" sx={{ minWidth: 300 }} disabled={loadingStudents}>
+          <FormControl size="small" sx={{ minWidth: 300 }}>
             <InputLabel id="dsar-student-label">Student</InputLabel>
             <Select
               labelId="dsar-student-label"
@@ -167,25 +461,7 @@ export function PrivacyView({ token }: { token: string }) {
         </Typography>
       </Paper>
 
-      {loadingStudents && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-          <CircularProgress />
-        </Box>
-      )}
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-
-      {notice && (
-        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setNotice(null)}>
-          {notice}
-        </Alert>
-      )}
-
-      {!loadingStudents && students.length === 0 && (
+      {students.length === 0 && (
         <Paper sx={{ p: 4, textAlign: 'center' }}>
           <Typography variant="body2" color="text.secondary">
             No students in this tenant yet.

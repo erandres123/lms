@@ -1,5 +1,21 @@
-import type { DsarExport, ErasureCategory, ErasurePlan } from '@lms/shared';
-import { Injectable, NotFoundException } from '@nestjs/common';
+import type {
+  ConsentCaptureInput,
+  ConsentRecord,
+  DsarExport,
+  ErasureCategory,
+  ErasurePlan,
+  PrivacyConsentOverview,
+  PrivacyNotice,
+  PrivacyNoticeSettings,
+  PrivacyNoticeUpdateInput,
+} from '@lms/shared';
+import { privacyNoticeSchema } from '@lms/shared';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { and, count, desc, eq, type SQL } from 'drizzle-orm';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import type { AuthUser } from '../auth/auth.types';
@@ -7,10 +23,209 @@ import { DatabaseService, type Database } from '../database/database.service';
 import * as schema from '../database/schema';
 
 const iso = (value: Date | null) => value?.toISOString() ?? null;
+const NOTICE_KEY = 'privacy.notice';
 
 @Injectable()
 export class PrivacyService {
   constructor(private readonly database: DatabaseService) {}
+
+  notice(user: AuthUser): Promise<PrivacyNoticeSettings> {
+    return this.database.withTenant(user.tenantId, (tx) =>
+      this.loadNoticeSettings(tx, user.tenantId),
+    );
+  }
+
+  updateNotice(user: AuthUser, input: PrivacyNoticeUpdateInput): Promise<PrivacyNoticeSettings> {
+    return this.database.withTenant(user.tenantId, async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(schema.tenantSettings)
+        .where(
+          and(
+            eq(schema.tenantSettings.tenantId, user.tenantId),
+            eq(schema.tenantSettings.key, NOTICE_KEY),
+          ),
+        )
+        .limit(1)
+        .for('update');
+
+      const currentVersion = existing?.version ?? 0;
+      if (input.version !== undefined && input.version !== currentVersion) {
+        throw new ConflictException('privacy notice changed since it was loaded');
+      }
+
+      const previous = existing ? (this.parseNotice(existing.value)?.title ?? null) : null;
+      const now = new Date();
+      let version: number;
+
+      if (existing) {
+        version = existing.version + 1;
+        await tx
+          .update(schema.tenantSettings)
+          .set({
+            value: input.notice,
+            version,
+            updatedBy: user.userId,
+            updatedAt: now,
+          })
+          .where(eq(schema.tenantSettings.id, existing.id));
+      } else {
+        version = 1;
+        await tx.insert(schema.tenantSettings).values({
+          tenantId: user.tenantId,
+          key: NOTICE_KEY,
+          value: input.notice,
+          version,
+          updatedBy: user.userId,
+        });
+      }
+
+      await tx.insert(schema.auditLog).values({
+        tenantId: user.tenantId,
+        actorId: user.userId,
+        action: 'privacy.notice_updated',
+        entity: 'tenant_settings',
+        entityId: NOTICE_KEY,
+        metadata: { version, previousTitle: previous, title: input.notice.title },
+      });
+
+      return { notice: input.notice, version, updatedAt: now.toISOString() };
+    });
+  }
+
+  async consents(user: AuthUser): Promise<PrivacyConsentOverview> {
+    return this.database.withTenant(user.tenantId, async (tx) => ({
+      notice: await this.loadNoticeSettings(tx, user.tenantId),
+      consents: await this.listConsents(tx, user.tenantId),
+    }));
+  }
+
+  captureConsent(
+    user: AuthUser,
+    studentId: string,
+    input: ConsentCaptureInput,
+  ): Promise<ConsentRecord> {
+    return this.database.withTenant(user.tenantId, async (tx) => {
+      await this.loadStudent(tx, user, studentId);
+      const settings = await this.loadNoticeSettings(tx, user.tenantId);
+      if (!settings.notice) {
+        throw new BadRequestException('save the privacy notice before capturing consent');
+      }
+
+      const [row] = await tx
+        .insert(schema.consentRecords)
+        .values({
+          tenantId: user.tenantId,
+          studentId,
+          noticeVersion: settings.version,
+          status: input.status,
+          guardianName: input.guardianName,
+          guardianRelationship: input.guardianRelationship,
+          guardianContact: input.guardianContact ?? null,
+          note: input.note ?? null,
+          capturedBy: user.userId,
+        })
+        .returning();
+      if (!row) throw new Error('failed to record consent');
+
+      const [student] = await tx
+        .select({ firstName: schema.students.firstName, lastName: schema.students.lastName })
+        .from(schema.students)
+        .where(eq(schema.students.id, studentId))
+        .limit(1);
+      const [actor] = await tx
+        .select({ displayName: schema.users.displayName, email: schema.users.email })
+        .from(schema.users)
+        .where(eq(schema.users.id, user.userId))
+        .limit(1);
+
+      await tx.insert(schema.auditLog).values({
+        tenantId: user.tenantId,
+        actorId: user.userId,
+        action: 'privacy.consent_recorded',
+        entity: 'student',
+        entityId: studentId,
+        metadata: { status: input.status, noticeVersion: settings.version },
+      });
+
+      return {
+        id: row.id,
+        studentId,
+        studentName: student ? `${student.lastName}, ${student.firstName}` : studentId,
+        guardianName: row.guardianName,
+        guardianRelationship: row.guardianRelationship,
+        guardianContact: row.guardianContact,
+        status: input.status,
+        noticeVersion: row.noticeVersion,
+        note: row.note,
+        capturedAt: row.capturedAt.toISOString(),
+        capturedByName: actor?.displayName ?? actor?.email ?? null,
+      };
+    });
+  }
+
+  private async loadNoticeSettings(tx: Database, tenantId: string): Promise<PrivacyNoticeSettings> {
+    const [row] = await tx
+      .select()
+      .from(schema.tenantSettings)
+      .where(
+        and(
+          eq(schema.tenantSettings.tenantId, tenantId),
+          eq(schema.tenantSettings.key, NOTICE_KEY),
+        ),
+      )
+      .limit(1);
+
+    return {
+      notice: row ? this.parseNotice(row.value) : null,
+      version: row?.version ?? 0,
+      updatedAt: iso(row?.updatedAt ?? null),
+    };
+  }
+
+  private parseNotice(value: Record<string, unknown>): PrivacyNotice | null {
+    const parsed = privacyNoticeSchema.safeParse(value);
+    return parsed.success ? parsed.data : null;
+  }
+
+  private async listConsents(tx: Database, tenantId: string): Promise<ConsentRecord[]> {
+    const rows = await tx
+      .select({
+        id: schema.consentRecords.id,
+        studentId: schema.consentRecords.studentId,
+        firstName: schema.students.firstName,
+        lastName: schema.students.lastName,
+        guardianName: schema.consentRecords.guardianName,
+        guardianRelationship: schema.consentRecords.guardianRelationship,
+        guardianContact: schema.consentRecords.guardianContact,
+        status: schema.consentRecords.status,
+        noticeVersion: schema.consentRecords.noticeVersion,
+        note: schema.consentRecords.note,
+        capturedAt: schema.consentRecords.capturedAt,
+        capturedByName: schema.users.displayName,
+        capturedByEmail: schema.users.email,
+      })
+      .from(schema.consentRecords)
+      .innerJoin(schema.students, eq(schema.consentRecords.studentId, schema.students.id))
+      .leftJoin(schema.users, eq(schema.consentRecords.capturedBy, schema.users.id))
+      .where(eq(schema.consentRecords.tenantId, tenantId))
+      .orderBy(desc(schema.consentRecords.capturedAt))
+      .limit(200);
+
+    return rows.map((row) => ({
+      id: row.id,
+      studentId: row.studentId,
+      studentName: `${row.lastName}, ${row.firstName}`,
+      guardianName: row.guardianName,
+      guardianRelationship: row.guardianRelationship,
+      guardianContact: row.guardianContact,
+      status: row.status,
+      noticeVersion: row.noticeVersion,
+      note: row.note,
+      capturedAt: row.capturedAt.toISOString(),
+      capturedByName: row.capturedByName ?? row.capturedByEmail ?? null,
+    }));
+  }
 
   dsarExport(user: AuthUser, studentId: string): Promise<DsarExport> {
     return this.database.withTenant(user.tenantId, async (tx) => {
@@ -18,7 +233,11 @@ export class PrivacyService {
       const userId = student.userId;
 
       const [tenant] = await tx
-        .select({ id: schema.tenants.id, name: schema.tenants.name, timezone: schema.tenants.timezone })
+        .select({
+          id: schema.tenants.id,
+          name: schema.tenants.name,
+          timezone: schema.tenants.timezone,
+        })
         .from(schema.tenants)
         .where(eq(schema.tenants.id, user.tenantId))
         .limit(1);
@@ -88,7 +307,10 @@ export class PrivacyService {
         })
         .from(schema.grades)
         .innerJoin(schema.gradeItems, eq(schema.grades.itemId, schema.gradeItems.id))
-        .innerJoin(schema.gradeCategories, eq(schema.gradeItems.categoryId, schema.gradeCategories.id))
+        .innerJoin(
+          schema.gradeCategories,
+          eq(schema.gradeItems.categoryId, schema.gradeCategories.id),
+        )
         .innerJoin(schema.gradingPeriods, eq(schema.gradeItems.periodId, schema.gradingPeriods.id))
         .innerJoin(schema.sections, eq(schema.gradeItems.sectionId, schema.sections.id))
         .where(
@@ -107,7 +329,10 @@ export class PrivacyService {
         })
         .from(schema.gradeOverrides)
         .innerJoin(schema.sections, eq(schema.gradeOverrides.sectionId, schema.sections.id))
-        .innerJoin(schema.gradingPeriods, eq(schema.gradeOverrides.periodId, schema.gradingPeriods.id))
+        .innerJoin(
+          schema.gradingPeriods,
+          eq(schema.gradeOverrides.periodId, schema.gradingPeriods.id),
+        )
         .where(
           and(
             eq(schema.gradeOverrides.tenantId, user.tenantId),
@@ -389,7 +614,10 @@ export class PrivacyService {
         action: 'privacy.erasure_dry_run',
         entity: 'student',
         entityId: studentId,
-        metadata: { categories: categories.length, rows: categories.reduce((sum, c) => sum + c.rows, 0) },
+        metadata: {
+          categories: categories.length,
+          rows: categories.reduce((sum, c) => sum + c.rows, 0),
+        },
       });
 
       return plan;

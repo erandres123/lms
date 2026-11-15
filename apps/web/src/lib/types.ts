@@ -334,6 +334,38 @@ export interface ErasurePlan {
   warnings: string[];
 }
 
+export interface PrivacyNotice {
+  title: string;
+  body: string;
+}
+
+export interface PrivacyNoticeSettings {
+  notice: PrivacyNotice | null;
+  version: number;
+  updatedAt: string | null;
+}
+
+export type ConsentStatus = 'granted' | 'withdrawn';
+
+export interface ConsentRecord {
+  id: string;
+  studentId: string;
+  studentName: string;
+  guardianName: string;
+  guardianRelationship: string;
+  guardianContact: string | null;
+  status: ConsentStatus;
+  noticeVersion: number;
+  note: string | null;
+  capturedAt: string;
+  capturedByName: string | null;
+}
+
+export interface PrivacyConsentOverview {
+  notice: PrivacyNoticeSettings;
+  consents: ConsentRecord[];
+}
+
 export type RetentionCategoryKey =
   'notificationsReadDays' | 'staleDeviceDays' | 'processedEventDays' | 'syncReceiptDays';
 

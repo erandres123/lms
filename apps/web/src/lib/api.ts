@@ -14,6 +14,9 @@ import type {
   NotificationInbox,
   NotificationItem,
   Period,
+  PrivacyConsentOverview,
+  PrivacyNotice,
+  PrivacyNoticeSettings,
   RetentionOverview,
   RetentionPolicy,
   RetentionRun,
@@ -232,6 +235,29 @@ export const api = {
     request<DsarExport>(`/privacy/students/${studentId}/export`, token),
   erasureDryRun: (token: string, studentId: string) =>
     request<ErasurePlan>(`/privacy/students/${studentId}/erasure-dry-run`, token),
+  privacyNotice: (token: string) => request<PrivacyNoticeSettings>('/privacy/notice', token),
+  savePrivacyNotice: (token: string, notice: PrivacyNotice, version: number) =>
+    request<PrivacyNoticeSettings>('/privacy/notice', token, {
+      method: 'PUT',
+      body: JSON.stringify({ notice, version }),
+    }),
+  privacyConsents: (token: string) => request<PrivacyConsentOverview>('/privacy/consents', token),
+  captureConsent: (
+    token: string,
+    studentId: string,
+    input: {
+      guardianName: string;
+      guardianRelationship: string;
+      guardianContact?: string | null;
+      status: 'granted' | 'withdrawn';
+      note?: string | null;
+    },
+  ) =>
+    request<PrivacyConsentOverview['consents'][number]>(
+      `/privacy/students/${studentId}/consents`,
+      token,
+      { method: 'POST', body: JSON.stringify(input) },
+    ),
   retention: (token: string) => request<RetentionOverview>('/retention', token),
   saveRetention: (token: string, policy: RetentionPolicy, version: number) =>
     request<RetentionSettings>('/retention', token, {

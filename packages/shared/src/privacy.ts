@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 export interface DsarStudent {
   id: string;
   userId: string | null;
@@ -83,4 +85,56 @@ export interface ErasurePlan {
   generatedAt: string;
   categories: ErasureCategory[];
   warnings: string[];
+}
+
+export const privacyNoticeSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  body: z.string().trim().min(1).max(20_000),
+});
+
+export type PrivacyNotice = z.infer<typeof privacyNoticeSchema>;
+
+export interface PrivacyNoticeSettings {
+  notice: PrivacyNotice | null;
+  version: number;
+  updatedAt: string | null;
+}
+
+export const privacyNoticeUpdateSchema = z.object({
+  notice: privacyNoticeSchema,
+  version: z.number().int().min(0).optional(),
+});
+
+export type PrivacyNoticeUpdateInput = z.infer<typeof privacyNoticeUpdateSchema>;
+
+export const consentStatusSchema = z.enum(['granted', 'withdrawn']);
+export type ConsentStatus = z.infer<typeof consentStatusSchema>;
+
+export const consentCaptureSchema = z.object({
+  guardianName: z.string().trim().min(1).max(200),
+  guardianRelationship: z.string().trim().min(1).max(80),
+  guardianContact: z.string().trim().max(200).nullish(),
+  status: consentStatusSchema,
+  note: z.string().trim().max(1000).nullish(),
+});
+
+export type ConsentCaptureInput = z.infer<typeof consentCaptureSchema>;
+
+export interface ConsentRecord {
+  id: string;
+  studentId: string;
+  studentName: string;
+  guardianName: string;
+  guardianRelationship: string;
+  guardianContact: string | null;
+  status: ConsentStatus;
+  noticeVersion: number;
+  note: string | null;
+  capturedAt: string;
+  capturedByName: string | null;
+}
+
+export interface PrivacyConsentOverview {
+  notice: PrivacyNoticeSettings;
+  consents: ConsentRecord[];
 }
