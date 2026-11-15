@@ -5,6 +5,8 @@ packages:
 
 allowBuilds:
   '@embedded-postgres/windows-x64': true
+  '@firebase/util': true
   '@parcel/watcher': true
   '@swc/core': true
   esbuild: true
+  protobufjs: true
