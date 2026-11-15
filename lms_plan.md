@@ -339,24 +339,29 @@ Team assumption: 2–3 full-stack engineers + 0.5 DevOps. **Gate G0 at Week 4** 
   - Flutter `LocalStore` (memory + SQLCipher Drift) mirror with user-scoped reset, cursor persistence, tombstone deletes; pull runner pages at 200 and dedupes in-flight runs. Unit tests cover upsert/tombstone/cursor/user switch. Server cursor paging and tombstone forwarding verified in the sync integration suite.
 - [x] Outbox push with `client_op_id` idempotency and `base_version` checks.
   - `sync_operations` receipt + savepoint per operation; duplicate replay returns the stored outcome; stale `baseVersion` rolls back the whole sheet and stores the conflict. Verified against real Postgres (7/7 integration tests, 72 unit tests).
-- [ ] Offline attendance marking for teachers (web + mobile) with pending badges and manual sync.
-  - [x] Web teacher sheet: IndexedDB outbox, localStorage roster cache, pending chips, manual/auto flush, stale-version reload. Code complete; teacher-flow browser run still pending a teacher session (token injection was blocked as credential exposure).
-  - [ ] Mobile teacher marking: the shipped Flutter app is the student app; it mirrors attendance read-only. Teacher offline marking needs the teacher app or a web-only sign-off.
+- [x] Offline attendance marking for teachers (web + mobile) with pending badges and manual sync.
+  - [x] Web teacher sheet: IndexedDB outbox, localStorage roster cache, pending chips, manual/auto flush, stale-version reload. Verified in-browser as `teacher@demo.ph` with the API stopped: save queued ("1 pending", "Saved on this device…"), Sync now applied the sheet once after restart (footer "1 applied · 0 conflicts · 0 failed"); cloud held exactly 3 rows for the day.
+  - [x] Mobile teacher marking (Flutter): the Attendance tab switches on the `app_role` claim in the access token (so it works offline), roster falls back to the Drift mirror, per-student status buttons + "Mark all present", a SQLCipher-Drift outbox (schema v3) that pushes the same `client_op_id`/`baseVersion` operations, queued chips, conflict list with reload, and manual Sync now. Covered by 8 outbox unit tests and 2 widget tests (offline queue, synced save pinning `baseVersion`); `flutter analyze` clean, 25/25 `flutter test`, web build compiles. Not yet exercised on a physical device or in-browser with a teacher account.
 - [ ] Conflict screen for rejected attendance/grade writes.
-  - [x] Attendance conflicts dialog with Reload/Discard and server-current status; server returns the conflicting record. Browser run pending with the teacher session.
+  - [x] Attendance conflicts dialog with Reload/Discard and server-current status; server returns the conflicting record. Verified in-browser: a queued offline edit was rejected after a simulated concurrent edit (cloud v2), the dialog showed "Server now: Excused", Reload showed v2, and the cloud row was not overwritten.
 - [ ] Patrol E2E: airplane mode → mark attendance → reconnect → server verified, exactly once.
-  - API-level patrol verified: same `clientOpId` pushed twice yields one write, `version` stays 1, second result `duplicate/applied`. Physical airplane-mode browser pass pending.
+  - API-level patrol verified: same `clientOpId` pushed twice yields one write, `version` stays 1, second result `duplicate/applied`. Browser pass done by stopping the API process instead of OS airplane mode (2026-11-15): queue → reconnect → single applied sheet, no duplicate student-days in cloud.
 - [x] Sync telemetry: failure rate, conflicts, queue depth.
   - `GET /v1/sync/stats` (admin) aggregates applied/conflict receipts; the web outbox records attempts, applied, conflicts, failures, last-sync time, and queue depth in local storage and shows the last sync in the sheet footer.
 
 ### Week 9 — Compliance pack and pilot readiness
 
 - [ ] Privacy notice in-app; guardian consent capture; DPA signed with the school.
-- [ ] Audit log viewer (admin) with filters: actor, entity, action, date.
+  - [x] Privacy notice authoring + consent ledger. `tenant_settings` key `privacy.notice` (title/body, optimistic version, 409 on stale, audited `privacy.notice_updated`); `consent_records` pins the notice version each capture was given, append-only, audited `privacy.consent_recorded`; `GET /v1/privacy/notice` for any signed-in role, admin-only PUT + `GET /v1/privacy/consents` + `POST /v1/privacy/students/:id/consents`. Web Privacy tab: draft editor (marked "draft only" until saved), granted/withdrawn toggle, history table. Migrations 0015/0016 applied locally and to Supabase; 6/6 new integration tests, 21/21 integration overall; verified in-browser with a real admin session (notice v1 saved, consent v1 recorded, audit rows present). The saved notice body is placeholder dummy text the school must replace.
+  - [ ] Still open: showing the notice inside the student app, guardian self-service consent (current capture is admin-recorded on the guardian's behalf), and the signed DPA. All need the school's legal text and sign-off.
+- [x] Audit log viewer (admin) with filters: actor, entity, action, date.
+  - `GET /v1/audit` (admin) filters actor/action/entity/entityId/from/to with keyset pagination; web "Audit" tab. Integration-tested and browser-checked with a real admin session.
 - [x] Retention settings UI + nightly job (dry-run mode for pilot).
   - Versioned `tenant_settings` row (`retention.policy`) holds admin-entered day windows for read notifications, stale push devices, processed meeting events, and sync receipts; blank means keep forever, and academic records are never in scope. `GET|PUT /v1/retention` (admin, optimistic version, 409 on stale) and `POST /v1/retention/dry-run`; a scheduler runs once per tenant-local day at the configured hour and writes a `retention_runs` ledger plus `retention.policy_updated` / `retention.dry_run` audit entries. Nothing is deleted yet; the retention integration suite proves counts, no-delete, tenant isolation, and once-per-day scheduling.
-- [ ] DSAR export for one test student; erasure dry-run.
-- [ ] Backup + restore drill executed and timed.
+- [x] DSAR export for one test student; erasure dry-run.
+  - `GET /v1/privacy/students/:id/export` and `.../erasure-dry-run` (admin, audited); export omits push tokens, dry-run is read-only and flags academic-retention and Supabase-Auth out-of-scope. Web "Privacy" tab, integration-tested and browser-checked.
+- [x] Backup + restore drill executed and timed.
+  - No `pg_dump`/Docker/WSL on this machine, so the drill uses the project's own restore path: schema rebuilt from the 14 Drizzle migrations, data captured as a repeatable-read JSON snapshot of all 22 public tables. Measured 2026-11-15: snapshot 2.2 s / 52.9 KiB, schema migrate 1.4 s, data load 37 ms, total restore-ready 1.5 s. Verification: 0 row/hash mismatches across all 22 tables (UTC-normalized), 22/22 RLS tables and 77 policies present, and the API booted against the restored database returning 200 for `/v1/me`, `/v1/audit`, and `/v1/retention` with a real admin session. Repeatable with `pnpm --filter @lms/api backup:drill`. Not a substitute for platform backups: enable Supabase daily backups/PITR before real student data.
 - [ ] Teacher training session (90 minutes) + one-page cheat sheet.
 - [ ] Support channel: dedicated group chat, named responder, P1 phone number.
 
