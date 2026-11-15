@@ -627,16 +627,573 @@ class AppMetaCompanion extends UpdateCompanion<AppMetaData> {
   }
 }
 
+class $OutboxOpsTable extends OutboxOps
+    with TableInfo<$OutboxOpsTable, OutboxOp> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $OutboxOpsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _clientOpIdMeta = const VerificationMeta(
+    'clientOpId',
+  );
+  @override
+  late final GeneratedColumn<String> clientOpId = GeneratedColumn<String>(
+    'client_op_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _payloadMeta = const VerificationMeta(
+    'payload',
+  );
+  @override
+  late final GeneratedColumn<String> payload = GeneratedColumn<String>(
+    'payload',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [clientOpId, payload, createdAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'outbox_ops';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<OutboxOp> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('client_op_id')) {
+      context.handle(
+        _clientOpIdMeta,
+        clientOpId.isAcceptableOrUnknown(
+          data['client_op_id']!,
+          _clientOpIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_clientOpIdMeta);
+    }
+    if (data.containsKey('payload')) {
+      context.handle(
+        _payloadMeta,
+        payload.isAcceptableOrUnknown(data['payload']!, _payloadMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_payloadMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {clientOpId};
+  @override
+  OutboxOp map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return OutboxOp(
+      clientOpId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}client_op_id'],
+      )!,
+      payload: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}payload'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $OutboxOpsTable createAlias(String alias) {
+    return $OutboxOpsTable(attachedDatabase, alias);
+  }
+}
+
+class OutboxOp extends DataClass implements Insertable<OutboxOp> {
+  final String clientOpId;
+  final String payload;
+  final DateTime createdAt;
+  const OutboxOp({
+    required this.clientOpId,
+    required this.payload,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['client_op_id'] = Variable<String>(clientOpId);
+    map['payload'] = Variable<String>(payload);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  OutboxOpsCompanion toCompanion(bool nullToAbsent) {
+    return OutboxOpsCompanion(
+      clientOpId: Value(clientOpId),
+      payload: Value(payload),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory OutboxOp.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return OutboxOp(
+      clientOpId: serializer.fromJson<String>(json['clientOpId']),
+      payload: serializer.fromJson<String>(json['payload']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'clientOpId': serializer.toJson<String>(clientOpId),
+      'payload': serializer.toJson<String>(payload),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  OutboxOp copyWith({
+    String? clientOpId,
+    String? payload,
+    DateTime? createdAt,
+  }) => OutboxOp(
+    clientOpId: clientOpId ?? this.clientOpId,
+    payload: payload ?? this.payload,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  OutboxOp copyWithCompanion(OutboxOpsCompanion data) {
+    return OutboxOp(
+      clientOpId: data.clientOpId.present
+          ? data.clientOpId.value
+          : this.clientOpId,
+      payload: data.payload.present ? data.payload.value : this.payload,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('OutboxOp(')
+          ..write('clientOpId: $clientOpId, ')
+          ..write('payload: $payload, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(clientOpId, payload, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is OutboxOp &&
+          other.clientOpId == this.clientOpId &&
+          other.payload == this.payload &&
+          other.createdAt == this.createdAt);
+}
+
+class OutboxOpsCompanion extends UpdateCompanion<OutboxOp> {
+  final Value<String> clientOpId;
+  final Value<String> payload;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const OutboxOpsCompanion({
+    this.clientOpId = const Value.absent(),
+    this.payload = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  OutboxOpsCompanion.insert({
+    required String clientOpId,
+    required String payload,
+    required DateTime createdAt,
+    this.rowid = const Value.absent(),
+  }) : clientOpId = Value(clientOpId),
+       payload = Value(payload),
+       createdAt = Value(createdAt);
+  static Insertable<OutboxOp> custom({
+    Expression<String>? clientOpId,
+    Expression<String>? payload,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (clientOpId != null) 'client_op_id': clientOpId,
+      if (payload != null) 'payload': payload,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  OutboxOpsCompanion copyWith({
+    Value<String>? clientOpId,
+    Value<String>? payload,
+    Value<DateTime>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return OutboxOpsCompanion(
+      clientOpId: clientOpId ?? this.clientOpId,
+      payload: payload ?? this.payload,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (clientOpId.present) {
+      map['client_op_id'] = Variable<String>(clientOpId.value);
+    }
+    if (payload.present) {
+      map['payload'] = Variable<String>(payload.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('OutboxOpsCompanion(')
+          ..write('clientOpId: $clientOpId, ')
+          ..write('payload: $payload, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $OutboxConflictsTable extends OutboxConflicts
+    with TableInfo<$OutboxConflictsTable, OutboxConflict> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $OutboxConflictsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _clientOpIdMeta = const VerificationMeta(
+    'clientOpId',
+  );
+  @override
+  late final GeneratedColumn<String> clientOpId = GeneratedColumn<String>(
+    'client_op_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _payloadMeta = const VerificationMeta(
+    'payload',
+  );
+  @override
+  late final GeneratedColumn<String> payload = GeneratedColumn<String>(
+    'payload',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [clientOpId, payload, createdAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'outbox_conflicts';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<OutboxConflict> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('client_op_id')) {
+      context.handle(
+        _clientOpIdMeta,
+        clientOpId.isAcceptableOrUnknown(
+          data['client_op_id']!,
+          _clientOpIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_clientOpIdMeta);
+    }
+    if (data.containsKey('payload')) {
+      context.handle(
+        _payloadMeta,
+        payload.isAcceptableOrUnknown(data['payload']!, _payloadMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_payloadMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {clientOpId};
+  @override
+  OutboxConflict map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return OutboxConflict(
+      clientOpId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}client_op_id'],
+      )!,
+      payload: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}payload'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $OutboxConflictsTable createAlias(String alias) {
+    return $OutboxConflictsTable(attachedDatabase, alias);
+  }
+}
+
+class OutboxConflict extends DataClass implements Insertable<OutboxConflict> {
+  final String clientOpId;
+  final String payload;
+  final DateTime createdAt;
+  const OutboxConflict({
+    required this.clientOpId,
+    required this.payload,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['client_op_id'] = Variable<String>(clientOpId);
+    map['payload'] = Variable<String>(payload);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  OutboxConflictsCompanion toCompanion(bool nullToAbsent) {
+    return OutboxConflictsCompanion(
+      clientOpId: Value(clientOpId),
+      payload: Value(payload),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory OutboxConflict.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return OutboxConflict(
+      clientOpId: serializer.fromJson<String>(json['clientOpId']),
+      payload: serializer.fromJson<String>(json['payload']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'clientOpId': serializer.toJson<String>(clientOpId),
+      'payload': serializer.toJson<String>(payload),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  OutboxConflict copyWith({
+    String? clientOpId,
+    String? payload,
+    DateTime? createdAt,
+  }) => OutboxConflict(
+    clientOpId: clientOpId ?? this.clientOpId,
+    payload: payload ?? this.payload,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  OutboxConflict copyWithCompanion(OutboxConflictsCompanion data) {
+    return OutboxConflict(
+      clientOpId: data.clientOpId.present
+          ? data.clientOpId.value
+          : this.clientOpId,
+      payload: data.payload.present ? data.payload.value : this.payload,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('OutboxConflict(')
+          ..write('clientOpId: $clientOpId, ')
+          ..write('payload: $payload, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(clientOpId, payload, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is OutboxConflict &&
+          other.clientOpId == this.clientOpId &&
+          other.payload == this.payload &&
+          other.createdAt == this.createdAt);
+}
+
+class OutboxConflictsCompanion extends UpdateCompanion<OutboxConflict> {
+  final Value<String> clientOpId;
+  final Value<String> payload;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const OutboxConflictsCompanion({
+    this.clientOpId = const Value.absent(),
+    this.payload = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  OutboxConflictsCompanion.insert({
+    required String clientOpId,
+    required String payload,
+    required DateTime createdAt,
+    this.rowid = const Value.absent(),
+  }) : clientOpId = Value(clientOpId),
+       payload = Value(payload),
+       createdAt = Value(createdAt);
+  static Insertable<OutboxConflict> custom({
+    Expression<String>? clientOpId,
+    Expression<String>? payload,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (clientOpId != null) 'client_op_id': clientOpId,
+      if (payload != null) 'payload': payload,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  OutboxConflictsCompanion copyWith({
+    Value<String>? clientOpId,
+    Value<String>? payload,
+    Value<DateTime>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return OutboxConflictsCompanion(
+      clientOpId: clientOpId ?? this.clientOpId,
+      payload: payload ?? this.payload,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (clientOpId.present) {
+      map['client_op_id'] = Variable<String>(clientOpId.value);
+    }
+    if (payload.present) {
+      map['payload'] = Variable<String>(payload.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('OutboxConflictsCompanion(')
+          ..write('clientOpId: $clientOpId, ')
+          ..write('payload: $payload, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $SyncRecordsTable syncRecords = $SyncRecordsTable(this);
   late final $AppMetaTable appMeta = $AppMetaTable(this);
+  late final $OutboxOpsTable outboxOps = $OutboxOpsTable(this);
+  late final $OutboxConflictsTable outboxConflicts = $OutboxConflictsTable(
+    this,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
-  List<DatabaseSchemaEntity> get allSchemaEntities => [syncRecords, appMeta];
+  List<DatabaseSchemaEntity> get allSchemaEntities => [
+    syncRecords,
+    appMeta,
+    outboxOps,
+    outboxConflicts,
+  ];
 }
 
 typedef $$SyncRecordsTableCreateCompanionBuilder =
@@ -1011,6 +1568,352 @@ typedef $$AppMetaTableProcessedTableManager =
       AppMetaData,
       PrefetchHooks Function()
     >;
+typedef $$OutboxOpsTableCreateCompanionBuilder =
+    OutboxOpsCompanion Function({
+      required String clientOpId,
+      required String payload,
+      required DateTime createdAt,
+      Value<int> rowid,
+    });
+typedef $$OutboxOpsTableUpdateCompanionBuilder =
+    OutboxOpsCompanion Function({
+      Value<String> clientOpId,
+      Value<String> payload,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+
+class $$OutboxOpsTableFilterComposer
+    extends Composer<_$AppDatabase, $OutboxOpsTable> {
+  $$OutboxOpsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get clientOpId => $composableBuilder(
+    column: $table.clientOpId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get payload => $composableBuilder(
+    column: $table.payload,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$OutboxOpsTableOrderingComposer
+    extends Composer<_$AppDatabase, $OutboxOpsTable> {
+  $$OutboxOpsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get clientOpId => $composableBuilder(
+    column: $table.clientOpId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get payload => $composableBuilder(
+    column: $table.payload,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$OutboxOpsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $OutboxOpsTable> {
+  $$OutboxOpsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get clientOpId => $composableBuilder(
+    column: $table.clientOpId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get payload =>
+      $composableBuilder(column: $table.payload, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$OutboxOpsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $OutboxOpsTable,
+          OutboxOp,
+          $$OutboxOpsTableFilterComposer,
+          $$OutboxOpsTableOrderingComposer,
+          $$OutboxOpsTableAnnotationComposer,
+          $$OutboxOpsTableCreateCompanionBuilder,
+          $$OutboxOpsTableUpdateCompanionBuilder,
+          (OutboxOp, BaseReferences<_$AppDatabase, $OutboxOpsTable, OutboxOp>),
+          OutboxOp,
+          PrefetchHooks Function()
+        > {
+  $$OutboxOpsTableTableManager(_$AppDatabase db, $OutboxOpsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$OutboxOpsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$OutboxOpsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$OutboxOpsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> clientOpId = const Value.absent(),
+                Value<String> payload = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => OutboxOpsCompanion(
+                clientOpId: clientOpId,
+                payload: payload,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String clientOpId,
+                required String payload,
+                required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => OutboxOpsCompanion.insert(
+                clientOpId: clientOpId,
+                payload: payload,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$OutboxOpsTable, OutboxOp>(table),
+                  BaseReferences<_$AppDatabase, $OutboxOpsTable, OutboxOp>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$OutboxOpsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $OutboxOpsTable,
+      OutboxOp,
+      $$OutboxOpsTableFilterComposer,
+      $$OutboxOpsTableOrderingComposer,
+      $$OutboxOpsTableAnnotationComposer,
+      $$OutboxOpsTableCreateCompanionBuilder,
+      $$OutboxOpsTableUpdateCompanionBuilder,
+      (OutboxOp, BaseReferences<_$AppDatabase, $OutboxOpsTable, OutboxOp>),
+      OutboxOp,
+      PrefetchHooks Function()
+    >;
+typedef $$OutboxConflictsTableCreateCompanionBuilder =
+    OutboxConflictsCompanion Function({
+      required String clientOpId,
+      required String payload,
+      required DateTime createdAt,
+      Value<int> rowid,
+    });
+typedef $$OutboxConflictsTableUpdateCompanionBuilder =
+    OutboxConflictsCompanion Function({
+      Value<String> clientOpId,
+      Value<String> payload,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+
+class $$OutboxConflictsTableFilterComposer
+    extends Composer<_$AppDatabase, $OutboxConflictsTable> {
+  $$OutboxConflictsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get clientOpId => $composableBuilder(
+    column: $table.clientOpId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get payload => $composableBuilder(
+    column: $table.payload,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$OutboxConflictsTableOrderingComposer
+    extends Composer<_$AppDatabase, $OutboxConflictsTable> {
+  $$OutboxConflictsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get clientOpId => $composableBuilder(
+    column: $table.clientOpId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get payload => $composableBuilder(
+    column: $table.payload,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$OutboxConflictsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $OutboxConflictsTable> {
+  $$OutboxConflictsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get clientOpId => $composableBuilder(
+    column: $table.clientOpId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get payload =>
+      $composableBuilder(column: $table.payload, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$OutboxConflictsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $OutboxConflictsTable,
+          OutboxConflict,
+          $$OutboxConflictsTableFilterComposer,
+          $$OutboxConflictsTableOrderingComposer,
+          $$OutboxConflictsTableAnnotationComposer,
+          $$OutboxConflictsTableCreateCompanionBuilder,
+          $$OutboxConflictsTableUpdateCompanionBuilder,
+          (
+            OutboxConflict,
+            BaseReferences<
+              _$AppDatabase,
+              $OutboxConflictsTable,
+              OutboxConflict
+            >,
+          ),
+          OutboxConflict,
+          PrefetchHooks Function()
+        > {
+  $$OutboxConflictsTableTableManager(
+    _$AppDatabase db,
+    $OutboxConflictsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$OutboxConflictsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$OutboxConflictsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$OutboxConflictsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> clientOpId = const Value.absent(),
+                Value<String> payload = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => OutboxConflictsCompanion(
+                clientOpId: clientOpId,
+                payload: payload,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String clientOpId,
+                required String payload,
+                required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => OutboxConflictsCompanion.insert(
+                clientOpId: clientOpId,
+                payload: payload,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$OutboxConflictsTable, OutboxConflict>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $OutboxConflictsTable,
+                    OutboxConflict
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$OutboxConflictsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $OutboxConflictsTable,
+      OutboxConflict,
+      $$OutboxConflictsTableFilterComposer,
+      $$OutboxConflictsTableOrderingComposer,
+      $$OutboxConflictsTableAnnotationComposer,
+      $$OutboxConflictsTableCreateCompanionBuilder,
+      $$OutboxConflictsTableUpdateCompanionBuilder,
+      (
+        OutboxConflict,
+        BaseReferences<_$AppDatabase, $OutboxConflictsTable, OutboxConflict>,
+      ),
+      OutboxConflict,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -1019,4 +1922,8 @@ class $AppDatabaseManager {
       $$SyncRecordsTableTableManager(_db, _db.syncRecords);
   $$AppMetaTableTableManager get appMeta =>
       $$AppMetaTableTableManager(_db, _db.appMeta);
+  $$OutboxOpsTableTableManager get outboxOps =>
+      $$OutboxOpsTableTableManager(_db, _db.outboxOps);
+  $$OutboxConflictsTableTableManager get outboxConflicts =>
+      $$OutboxConflictsTableTableManager(_db, _db.outboxConflicts);
 }

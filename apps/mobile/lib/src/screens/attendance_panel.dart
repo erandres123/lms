@@ -5,7 +5,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../api/models.dart';
 import '../providers.dart';
+import '../widgets/attendance_status.dart';
 import '../widgets/error_view.dart';
+import 'teacher_attendance_panel.dart';
 
 class AttendancePanel extends ConsumerStatefulWidget {
   const AttendancePanel({super.key, required this.sectionId});
@@ -33,6 +35,10 @@ class _AttendancePanelState extends ConsumerState<AttendancePanel> {
 
   @override
   Widget build(BuildContext context) {
+    final role = ref.watch(sessionRoleProvider);
+    if (role != null && role != 'student') {
+      return TeacherAttendancePanel(sectionId: widget.sectionId);
+    }
     final theme = Theme.of(context);
     final key = (sectionId: widget.sectionId, date: _isoDate);
     final records = ref.watch(attendanceProvider(key));
@@ -114,7 +120,7 @@ class _AttendancePanelState extends ConsumerState<AttendancePanel> {
                             : '${student.firstName} ${student.lastName}'.trim(),
                       ),
                       subtitle: record.note == null ? null : Text(record.note!),
-                      trailing: _StatusChip(status: record.status),
+                      trailing: AttendanceStatusChip(status: record.status),
                     );
                   },
                 );
@@ -141,13 +147,8 @@ class _OwnRecordCard extends StatelessWidget {
         child: Row(
           children: [
             Icon(
-              switch (record.status) {
-                AttendanceStatus.present => Icons.check_circle,
-                AttendanceStatus.absent => Icons.cancel,
-                AttendanceStatus.late => Icons.schedule,
-                AttendanceStatus.excused => Icons.verified_user,
-              },
-              color: _statusColor(context, record.status),
+              attendanceStatusIcon(record.status),
+              color: attendanceStatusColor(context, record.status),
               size: 36,
             ),
             const SizedBox(width: 16),
@@ -166,36 +167,4 @@ class _OwnRecordCard extends StatelessWidget {
       ),
     );
   }
-}
-
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.status});
-
-  final AttendanceStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = _statusColor(context, status);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        status.label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(color: color),
-      ),
-    );
-  }
-}
-
-Color _statusColor(BuildContext context, AttendanceStatus status) {
-  final scheme = Theme.of(context).colorScheme;
-  return switch (status) {
-    AttendanceStatus.present => scheme.primary,
-    AttendanceStatus.absent => scheme.error,
-    AttendanceStatus.late => scheme.tertiary,
-    AttendanceStatus.excused => scheme.secondary,
-  };
 }

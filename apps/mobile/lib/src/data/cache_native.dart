@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import '../api/models.dart';
 import 'cache.dart';
 import 'database.dart';
+import 'outbox.dart';
 
 Future<LocalStore> openLocalStore() async {
   final directory = await getApplicationSupportDirectory();
@@ -52,6 +53,8 @@ class DriftLocalStore implements LocalStore {
 
     await _database.transaction(() async {
       await _database.delete(_database.syncRecords).go();
+      await _database.delete(_database.outboxOps).go();
+      await _database.delete(_database.outboxConflicts).go();
       await _writeMeta(_userKey, userId);
       await _writeMeta(_cursorKey, '0');
     });
@@ -104,6 +107,68 @@ class DriftLocalStore implements LocalStore {
     return [
       for (final row in rows) jsonDecode(row.payload) as Map<String, dynamic>,
     ];
+  }
+
+  @override
+  Future<List<AttendanceOutboxOp>> listPendingOps() async {
+    final rows = await (_database.select(_database.outboxOps)
+          ..orderBy([(row) => OrderingTerm.asc(row.createdAt)]))
+        .get();
+    return [
+      for (final row in rows)
+        AttendanceOutboxOp.fromJson(
+          jsonDecode(row.payload) as Map<String, dynamic>,
+        ),
+    ];
+  }
+
+  @override
+  Future<void> enqueueOp(AttendanceOutboxOp op) async {
+    await _database.into(_database.outboxOps).insertOnConflictUpdate(
+      OutboxOpsCompanion.insert(
+        clientOpId: op.clientOpId,
+        payload: jsonEncode(op.toJson()),
+        createdAt: op.createdAt,
+      ),
+    );
+  }
+
+  @override
+  Future<void> removeOp(String clientOpId) async {
+    await (_database.delete(_database.outboxOps)
+          ..where((row) => row.clientOpId.equals(clientOpId)))
+        .go();
+  }
+
+  @override
+  Future<List<AttendanceOutboxConflict>> listConflicts() async {
+    final rows = await (_database.select(_database.outboxConflicts)
+          ..orderBy([(row) => OrderingTerm.desc(row.createdAt)]))
+        .get();
+    return [
+      for (final row in rows)
+        AttendanceOutboxConflict.fromJson(
+          jsonDecode(row.payload) as Map<String, dynamic>,
+        ),
+    ];
+  }
+
+  @override
+  Future<void> putConflict(AttendanceOutboxConflict conflict) async {
+    await _database.into(_database.outboxConflicts).insertOnConflictUpdate(
+      OutboxConflictsCompanion.insert(
+        clientOpId: conflict.op.clientOpId,
+        payload: jsonEncode(conflict.toJson()),
+        createdAt: DateTime.now(),
+      ),
+    );
+  }
+
+  @override
+  Future<void> removeConflict(String clientOpId) async {
+    await (_database.delete(_database.outboxConflicts)
+          ..where((row) => row.clientOpId.equals(clientOpId)))
+        .go();
   }
 
   Future<String?> _readMeta(String key) async {

@@ -22,12 +22,30 @@ class AppMeta extends Table {
   Set<Column<Object>> get primaryKey => {key};
 }
 
-@DriftDatabase(tables: [SyncRecords, AppMeta])
+class OutboxOps extends Table {
+  TextColumn get clientOpId => text()();
+  TextColumn get payload => text()();
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {clientOpId};
+}
+
+class OutboxConflicts extends Table {
+  TextColumn get clientOpId => text()();
+  TextColumn get payload => text()();
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {clientOpId};
+}
+
+@DriftDatabase(tables: [SyncRecords, AppMeta, OutboxOps, OutboxConflicts])
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -38,6 +56,10 @@ class AppDatabase extends _$AppDatabase {
       if (from < 2) {
         await m.createTable(syncRecords);
         await m.deleteTable('cached_sections');
+      }
+      if (from < 3) {
+        await m.createTable(outboxOps);
+        await m.createTable(outboxConflicts);
       }
     },
   );

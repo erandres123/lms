@@ -88,6 +88,16 @@ class ApiClient {
         .toList();
   }
 
+  Future<SyncPushResponse> push(
+    List<Map<String, dynamic>> operations,
+  ) async {
+    final payload = await _post(
+      '/v1/sync/push',
+      body: {'operations': operations},
+    );
+    return SyncPushResponse.fromJson(payload as Map<String, dynamic>);
+  }
+
   Future<JoinResult> join(String meetingId) async {
     final payload = await _post('/v1/meetings/$meetingId/join');
     return JoinResult.fromJson(payload as Map<String, dynamic>);

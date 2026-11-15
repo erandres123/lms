@@ -7,10 +7,16 @@ import 'api/api_client.dart';
 import 'api/models.dart';
 import 'data/cache.dart';
 import 'data/cache_factory.dart';
+import 'data/outbox.dart';
 import 'data/sync_runner.dart';
+import 'session.dart';
 
 final apiClientProvider = Provider<ApiClient>(
   (ref) => ApiClient(Supabase.instance.client),
+);
+
+final pushAttendanceOpsProvider = Provider<PushAttendanceOps>(
+  (ref) => ref.watch(apiClientProvider).push,
 );
 
 final localStoreProvider = FutureProvider<LocalStore>(
@@ -25,6 +31,13 @@ final syncRunnerProvider = FutureProvider<SyncRunner>((ref) async {
 
 final meProvider = FutureProvider.autoDispose<Me>(
   (ref) => ref.watch(apiClientProvider).me(),
+);
+
+/// The signed-in role, read from the token so it survives offline.
+final sessionRoleProvider = Provider<String?>(
+  (ref) => roleFromToken(
+    Supabase.instance.client.auth.currentSession?.accessToken,
+  ),
 );
 
 final sectionsProvider = FutureProvider<List<Section>>((ref) async {
@@ -69,9 +82,34 @@ final meetingsProvider = FutureProvider.autoDispose
     );
 
 final rosterProvider = FutureProvider.autoDispose
-    .family<List<RosterStudent>, String>(
-      (ref, sectionId) => ref.watch(apiClientProvider).roster(sectionId),
-    );
+    .family<List<RosterStudent>, String>((ref, sectionId) async {
+      final api = ref.watch(apiClientProvider);
+      try {
+        return await api.roster(sectionId);
+      } on Exception {
+        final store = await ref.watch(localStoreProvider.future);
+        final enrollments = await store.readTable('enrollments');
+        final students = await store.readTable('students');
+        final byId = {
+          for (final row in students ?? const <Map<String, dynamic>>[])
+            row['id'] as String: row,
+        };
+        final roster = <RosterStudent>[
+          for (final row in enrollments ?? const <Map<String, dynamic>>[])
+            if (row['sectionId'] == sectionId &&
+                row['status'] == 'active' &&
+                byId[row['studentId']] != null)
+              RosterStudent(
+                id: byId[row['studentId']]!['id'] as String,
+                firstName: byId[row['studentId']]!['firstName'] as String,
+                lastName: byId[row['studentId']]!['lastName'] as String,
+                userId: byId[row['studentId']]!['userId'] as String?,
+              ),
+        ]..sort((a, b) => a.lastName.toLowerCase().compareTo(b.lastName.toLowerCase()));
+        if (roster.isNotEmpty) return roster;
+        rethrow;
+      }
+    });
 
 typedef GradebookKey = ({String sectionId, String periodId});
 

@@ -292,6 +292,7 @@ class AttendanceRecord {
     required this.studentId,
     required this.date,
     required this.status,
+    this.version = 1,
     this.note,
   });
 
@@ -300,12 +301,14 @@ class AttendanceRecord {
         studentId: json['studentId'] as String,
         date: json['date'] as String,
         status: AttendanceStatus.fromWire(json['status'] as String),
+        version: (json['version'] as num?)?.toInt() ?? 1,
         note: json['note'] as String?,
       );
 
   final String studentId;
   final String date;
   final AttendanceStatus status;
+  final int version;
   final String? note;
 }
 
@@ -444,4 +447,77 @@ class SyncPage {
   final List<SyncChange> changes;
   final int nextCursor;
   final bool hasMore;
+}
+
+class SyncConflictDetail {
+  const SyncConflictDetail({
+    required this.message,
+    this.studentId,
+    this.currentStatus,
+    this.currentVersion,
+  });
+
+  factory SyncConflictDetail.fromJson(Map<String, dynamic> json) {
+    final current = json['current'] as Map<String, dynamic>?;
+    return SyncConflictDetail(
+      message: (json['message'] as String?) ?? 'the server kept a newer version',
+      studentId: json['studentId'] as String?,
+      currentStatus: current?['status'] as String?,
+      currentVersion: (current?['version'] as num?)?.toInt(),
+    );
+  }
+
+  final String message;
+  final String? studentId;
+  final String? currentStatus;
+  final int? currentVersion;
+}
+
+class SyncPushOutcome {
+  const SyncPushOutcome({
+    required this.clientOpId,
+    required this.status,
+    this.storedStatus,
+    this.conflict,
+    this.message,
+  });
+
+  factory SyncPushOutcome.fromJson(Map<String, dynamic> json) {
+    final rawConflict = json['conflict'] as Map<String, dynamic>?;
+    return SyncPushOutcome(
+      clientOpId: json['clientOpId'] as String,
+      status: json['status'] as String,
+      storedStatus: json['storedStatus'] as String?,
+      conflict: rawConflict == null
+          ? null
+          : SyncConflictDetail.fromJson(rawConflict),
+      message: json['message'] as String?,
+    );
+  }
+
+  final String clientOpId;
+  final String status;
+  final String? storedStatus;
+  final SyncConflictDetail? conflict;
+  final String? message;
+
+  bool get applied => status == 'applied';
+  bool get duplicateApplied =>
+      status == 'duplicate' && storedStatus == 'applied';
+  bool get settled => applied || duplicateApplied;
+}
+
+class SyncPushResponse {
+  const SyncPushResponse({required this.results});
+
+  factory SyncPushResponse.fromJson(Map<String, dynamic> json) =>
+      SyncPushResponse(
+        results: (json['results'] as List<dynamic>)
+            .map(
+              (entry) => SyncPushOutcome.fromJson(entry as Map<String, dynamic>),
+            )
+            .toList(),
+      );
+
+  final List<SyncPushOutcome> results;
 }
