@@ -21,6 +21,7 @@
     "provision:tenant": "tsx src/scripts/provision-tenant.ts",
     "dev:token": "tsx src/scripts/dev-token.ts",
     "demo:seed": "tsx src/scripts/seed-demo.ts",
+    "backup:drill": "node --env-file=.env scripts/backup-drill.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
