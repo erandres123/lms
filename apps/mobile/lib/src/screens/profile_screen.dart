@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../providers.dart';
@@ -26,6 +27,14 @@ class ProfileScreen extends ConsumerWidget {
               leading: const CircleAvatar(child: Icon(Icons.person)),
               title: Text(me.email ?? 'Signed in'),
               subtitle: Text(_roleLabel(me.role)),
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.privacy_tip_outlined),
+              title: const Text('Privacy notice'),
+              subtitle: const Text('How the school handles your data'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push('/privacy'),
             ),
             const Divider(),
             ListTile(

@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'screens/join_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/notifications_screen.dart';
+import 'screens/privacy_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/schedule_screen.dart';
 import 'screens/section_detail_screen.dart';
@@ -58,6 +59,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/join/:meetingId',
         builder: (context, state) =>
             JoinScreen(meetingId: state.pathParameters['meetingId']!),
+      ),
+      GoRoute(
+        path: '/privacy',
+        builder: (_, _) => const PrivacyScreen(),
       ),
     ],
   );

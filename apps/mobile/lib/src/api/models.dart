@@ -521,3 +521,38 @@ class SyncPushResponse {
 
   final List<SyncPushOutcome> results;
 }
+
+class PrivacyNotice {
+  const PrivacyNotice({required this.title, required this.body});
+
+  factory PrivacyNotice.fromJson(Map<String, dynamic> json) => PrivacyNotice(
+    title: json['title'] as String,
+    body: json['body'] as String,
+  );
+
+  final String title;
+  final String body;
+}
+
+class PrivacyNoticeSettings {
+  const PrivacyNoticeSettings({
+    required this.notice,
+    required this.version,
+    this.updatedAt,
+  });
+
+  factory PrivacyNoticeSettings.fromJson(Map<String, dynamic> json) {
+    final rawNotice = json['notice'] as Map<String, dynamic>?;
+    return PrivacyNoticeSettings(
+      notice: rawNotice == null ? null : PrivacyNotice.fromJson(rawNotice),
+      version: (json['version'] as num).toInt(),
+      updatedAt: json['updatedAt'] == null
+          ? null
+          : DateTime.parse(json['updatedAt'] as String).toLocal(),
+    );
+  }
+
+  final PrivacyNotice? notice;
+  final int version;
+  final DateTime? updatedAt;
+}

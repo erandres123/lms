@@ -98,6 +98,11 @@ class ApiClient {
     return SyncPushResponse.fromJson(payload as Map<String, dynamic>);
   }
 
+  Future<PrivacyNoticeSettings> privacyNotice() async {
+    final payload = await _get('/v1/privacy/notice');
+    return PrivacyNoticeSettings.fromJson(payload as Map<String, dynamic>);
+  }
+
   Future<JoinResult> join(String meetingId) async {
     final payload = await _post('/v1/meetings/$meetingId/join');
     return JoinResult.fromJson(payload as Map<String, dynamic>);

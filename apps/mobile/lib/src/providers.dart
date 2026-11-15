@@ -144,6 +144,11 @@ final notificationsProvider = FutureProvider.autoDispose<NotificationInbox>(
   (ref) => ref.watch(apiClientProvider).notifications(),
 );
 
+final privacyNoticeProvider =
+    FutureProvider.autoDispose<PrivacyNoticeSettings>(
+      (ref) => ref.watch(apiClientProvider).privacyNotice(),
+    );
+
 // A 403 means the teacher has not started the class; retrying would loop.
 final joinProvider = FutureProvider.autoDispose.family<JoinResult, String>(
   (ref, meetingId) => ref.watch(apiClientProvider).join(meetingId),
