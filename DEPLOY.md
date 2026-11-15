@@ -21,6 +21,7 @@ Environment:
 | `DATABASE_SSL_CA`                                      | `certs/supabase-root-2021-ca.crt` (committed, resolved from `apps/api`) |
 | `SUPABASE_URL`                                         | `https://<project-ref>.supabase.co`                                     |
 | `SUPABASE_JWT_AUDIENCE`                                | `authenticated`                                                         |
+| `SUPABASE_SERVICE_ROLE_KEY`                            | Supabase service role key; required for guardian account provisioning    |
 | `CORS_ORIGINS`                                         | the Vercel production URL, comma-separated if there are more            |
 | `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | LiveKit project (omit all three to disable live classes)                |
 | `FIREBASE_SERVICE_ACCOUNT_PATH`                        | `/etc/secrets/firebase-service-account.json`                            |
@@ -30,6 +31,10 @@ Environment:
 service-account JSON under Secret Files with that exact filename; leave the
 variable unset to run without push delivery. The key never goes into a public
 env var or the repo.
+
+`SUPABASE_SERVICE_ROLE_KEY` bypasses row-level security, so it belongs only in
+the API host's secret env. Leave it unset to run without guardian provisioning;
+the guardian account routes then return 503.
 
 Migrations are not run at boot. Apply them from a trusted machine before the
 first deploy:

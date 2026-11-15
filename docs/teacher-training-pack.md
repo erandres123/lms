@@ -6,6 +6,18 @@ Outcome: every teacher can take attendance (online and offline), record grades, 
 
 This pack is training material only. It is not the school's privacy notice, DPA, or retention policy; those must be supplied and signed by the school.
 
+## Session details (fill in before printing)
+
+| Field                                    | Value              |
+| ---------------------------------------- | ------------------ |
+| Date and time                            | [school to fill]   |
+| Room or video link                       | [school to fill]   |
+| Facilitator                              | [school to fill]   |
+| Teachers attending                       | [school to fill]   |
+| Devices on hand (laptop, phone, tablet)   | [school to fill]   |
+| Support contact during the session       | [school to fill]   |
+| Follow-up check-in date                  | [school to fill]   |
+
 ## Before the session (admin, 20 minutes)
 
 - [ ] Confirm every teacher has an account and can sign in to the web app (`/`) and the mobile app.
