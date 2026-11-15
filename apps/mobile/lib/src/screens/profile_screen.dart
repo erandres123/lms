@@ -29,6 +29,16 @@ class ProfileScreen extends ConsumerWidget {
               subtitle: Text(_roleLabel(me.role)),
             ),
             const Divider(),
+            if (me.role == 'parent') ...[
+              ListTile(
+                leading: const Icon(Icons.fact_check_outlined),
+                title: const Text('Consent'),
+                subtitle: const Text('Grant or withdraw consent for your child'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.push('/guardian/consent'),
+              ),
+              const Divider(),
+            ],
             ListTile(
               leading: const Icon(Icons.privacy_tip_outlined),
               title: const Text('Privacy notice'),

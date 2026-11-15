@@ -149,6 +149,11 @@ final privacyNoticeProvider =
       (ref) => ref.watch(apiClientProvider).privacyNotice(),
     );
 
+final guardianOverviewProvider =
+    FutureProvider.autoDispose<GuardianOverview>(
+      (ref) => ref.watch(apiClientProvider).guardianOverview(),
+    );
+
 // A 403 means the teacher has not started the class; retrying would loop.
 final joinProvider = FutureProvider.autoDispose.family<JoinResult, String>(
   (ref, meetingId) => ref.watch(apiClientProvider).join(meetingId),

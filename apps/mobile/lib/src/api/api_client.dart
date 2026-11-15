@@ -103,6 +103,22 @@ class ApiClient {
     return PrivacyNoticeSettings.fromJson(payload as Map<String, dynamic>);
   }
 
+  Future<GuardianOverview> guardianOverview() async {
+    final payload = await _get('/v1/guardian/overview');
+    return GuardianOverview.fromJson(payload as Map<String, dynamic>);
+  }
+
+  Future<void> captureGuardianConsent(
+    String studentId, {
+    required String status,
+    String? note,
+  }) async {
+    await _post(
+      '/v1/guardian/students/$studentId/consents',
+      body: {'status': status, 'note': ?note},
+    );
+  }
+
   Future<JoinResult> join(String meetingId) async {
     final payload = await _post('/v1/meetings/$meetingId/join');
     return JoinResult.fromJson(payload as Map<String, dynamic>);

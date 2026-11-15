@@ -556,3 +556,55 @@ class PrivacyNoticeSettings {
   final int version;
   final DateTime? updatedAt;
 }
+
+class GuardianStudent {
+  const GuardianStudent({
+    required this.studentId,
+    required this.firstName,
+    required this.lastName,
+    required this.relationship,
+    this.consentStatus,
+    this.consentNoticeVersion,
+    this.consentAt,
+  });
+
+  factory GuardianStudent.fromJson(Map<String, dynamic> json) => GuardianStudent(
+    studentId: json['studentId'] as String,
+    firstName: json['firstName'] as String,
+    lastName: json['lastName'] as String,
+    relationship: json['relationship'] as String,
+    consentStatus: json['consentStatus'] as String?,
+    consentNoticeVersion: (json['consentNoticeVersion'] as num?)?.toInt(),
+    consentAt: json['consentAt'] == null
+        ? null
+        : DateTime.parse(json['consentAt'] as String).toLocal(),
+  );
+
+  final String studentId;
+  final String firstName;
+  final String lastName;
+  final String relationship;
+  final String? consentStatus;
+  final int? consentNoticeVersion;
+  final DateTime? consentAt;
+
+  String get displayName => '$lastName, $firstName';
+}
+
+class GuardianOverview {
+  const GuardianOverview({required this.notice, required this.students});
+
+  factory GuardianOverview.fromJson(Map<String, dynamic> json) => GuardianOverview(
+    notice: PrivacyNoticeSettings.fromJson(
+      json['notice'] as Map<String, dynamic>,
+    ),
+    students: [
+      for (final entry in json['students'] as List<dynamic>? ?? const [])
+        GuardianStudent.fromJson(entry as Map<String, dynamic>),
+    ],
+  );
+
+  final PrivacyNoticeSettings notice;
+  final List<GuardianStudent> students;
+}
+

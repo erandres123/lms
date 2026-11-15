@@ -6,6 +6,10 @@ import type {
   DsarExport,
   ErasurePlan,
   Gradebook,
+  GuardianAccessMode,
+  GuardianAccessSettings,
+  GuardianAccountResult,
+  GuardianLink,
   JoinMeetingResult,
   Me,
   Meeting,
@@ -242,6 +246,27 @@ export const api = {
       body: JSON.stringify({ notice, version }),
     }),
   privacyConsents: (token: string) => request<PrivacyConsentOverview>('/privacy/consents', token),
+  guardianAccess: (token: string) =>
+    request<GuardianAccessSettings>('/privacy/guardian-access', token),
+  saveGuardianAccess: (token: string, mode: GuardianAccessMode, version: number) =>
+    request<GuardianAccessSettings>('/privacy/guardian-access', token, {
+      method: 'PUT',
+      body: JSON.stringify({ mode, version }),
+    }),
+  guardians: (token: string) => request<GuardianLink[]>('/privacy/guardians', token),
+  createGuardian: (
+    token: string,
+    input: {
+      email: string;
+      displayName: string;
+      relationship: string;
+      studentId: string;
+    },
+  ) =>
+    request<GuardianAccountResult>('/privacy/guardians', token, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
   captureConsent: (
     token: string,
     studentId: string,

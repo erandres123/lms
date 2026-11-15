@@ -366,6 +366,36 @@ export interface PrivacyConsentOverview {
   consents: ConsentRecord[];
 }
 
+export type GuardianAccessMode = 'admin_created' | 'email_invite' | 'magic_link';
+
+export interface GuardianAccessSettings {
+  mode: GuardianAccessMode;
+  version: number;
+  updatedAt: string | null;
+}
+
+export interface GuardianLink {
+  id: string;
+  guardianUserId: string;
+  email: string;
+  displayName: string | null;
+  studentId: string;
+  studentName: string;
+  relationship: string;
+  createdAt: string;
+}
+
+export interface GuardianAccountResult {
+  guardianUserId: string;
+  email: string;
+  displayName: string;
+  studentId: string;
+  relationship: string;
+  mode: GuardianAccessMode;
+  invited: boolean;
+  temporaryPassword: string | null;
+}
+
 export type RetentionCategoryKey =
   'notificationsReadDays' | 'staleDeviceDays' | 'processedEventDays' | 'syncReceiptDays';
 

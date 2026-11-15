@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'screens/join_screen.dart';
+import 'screens/guardian_consent_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'screens/privacy_screen.dart';
@@ -63,6 +64,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/privacy',
         builder: (_, _) => const PrivacyScreen(),
+      ),
+      GoRoute(
+        path: '/guardian/consent',
+        builder: (_, _) => const GuardianConsentScreen(),
       ),
     ],
   );

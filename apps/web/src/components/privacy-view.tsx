@@ -33,10 +33,20 @@ import type {
   ConsentRecord,
   ConsentStatus,
   ErasurePlan,
+  GuardianAccessMode,
+  GuardianAccessSettings,
+  GuardianAccountResult,
+  GuardianLink,
   PrivacyNotice,
   PrivacyNoticeSettings,
   StudentOption,
 } from '@/lib/types';
+
+const GUARDIAN_MODE_COPY: Record<GuardianAccessMode, string> = {
+  admin_created: 'Admin creates the account and hands over a one-time password.',
+  email_invite: 'Supabase emails an invite; the guardian sets their own password.',
+  magic_link: 'No password; the guardian signs in with an emailed magic link.',
+};
 
 const messageOf = (error: unknown) =>
   error instanceof Error ? error.message : 'Something went wrong';
@@ -90,7 +100,9 @@ export function PrivacyView({ token }: { token: string }) {
   const [students, setStudents] = useState<StudentOption[]>([]);
   const [studentId, setStudentId] = useState('');
   const [loading, setLoading] = useState(true);
-  const [working, setWorking] = useState<'export' | 'plan' | 'notice' | 'consent' | null>(null);
+  const [working, setWorking] = useState<
+    'export' | 'plan' | 'notice' | 'consent' | 'guardian' | 'guardian-mode' | null
+  >(null);
   const [plan, setPlan] = useState<ErasurePlan | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -104,16 +116,34 @@ export function PrivacyView({ token }: { token: string }) {
   const [consentStatus, setConsentStatus] = useState<ConsentStatus>('granted');
   const [consentNote, setConsentNote] = useState('');
 
+  const [guardianAccess, setGuardianAccess] = useState<GuardianAccessSettings | null>(null);
+  const [guardianMode, setGuardianMode] = useState<GuardianAccessMode>('admin_created');
+  const [guardians, setGuardians] = useState<GuardianLink[]>([]);
+  const [guardianEmail, setGuardianEmail] = useState('');
+  const [guardianDisplayName, setGuardianDisplayName] = useState('');
+  const [guardianLinkRelationship, setGuardianLinkRelationship] = useState('Parent');
+  const [guardianStudentId, setGuardianStudentId] = useState('');
+  const [createdGuardian, setCreatedGuardian] = useState<GuardianAccountResult | null>(null);
+
   useEffect(() => {
     let cancelled = false;
-    Promise.all([api.students(token), api.privacyConsents(token)])
-      .then(([rows, overview]) => {
+    Promise.all([
+      api.students(token),
+      api.privacyConsents(token),
+      api.guardianAccess(token),
+      api.guardians(token),
+    ])
+      .then(([rows, overview, access, links]) => {
         if (cancelled) return;
         setStudents(rows);
         setStudentId((current) => current || rows[0]?.id || '');
+        setGuardianStudentId((current) => current || rows[0]?.id || '');
         setNoticeSettings(overview.notice);
         setNoticeDraft(overview.notice.notice ?? DRAFT_NOTICE);
         setConsents(overview.consents);
+        setGuardianAccess(access);
+        setGuardianMode(access.mode);
+        setGuardians(links);
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(messageOf(err));
@@ -182,6 +212,53 @@ export function PrivacyView({ token }: { token: string }) {
       setNotice(
         `Consent (${consentStatus}) recorded for ${record.studentName} against notice version ${record.noticeVersion}.`,
       );
+    } catch (err: unknown) {
+      setError(messageOf(err));
+    } finally {
+      setWorking(null);
+    }
+  };
+
+  const saveGuardianMode = async () => {
+    setWorking('guardian-mode');
+    setError(null);
+    setNotice(null);
+    try {
+      const saved = await api.saveGuardianAccess(
+        token,
+        guardianMode,
+        guardianAccess?.version ?? 0,
+      );
+      setGuardianAccess(saved);
+      setGuardianMode(saved.mode);
+      setNotice(`Guardian account mode saved as ${saved.mode} (version ${saved.version}).`);
+    } catch (err: unknown) {
+      setError(messageOf(err));
+    } finally {
+      setWorking(null);
+    }
+  };
+
+  const createGuardian = async () => {
+    if (!guardianStudentId || !guardianEmail.trim() || !guardianDisplayName.trim()) {
+      setError('Student, guardian email, and display name are required.');
+      return;
+    }
+    setWorking('guardian');
+    setError(null);
+    setNotice(null);
+    setCreatedGuardian(null);
+    try {
+      const result = await api.createGuardian(token, {
+        studentId: guardianStudentId,
+        email: guardianEmail.trim(),
+        displayName: guardianDisplayName.trim(),
+        relationship: guardianLinkRelationship.trim() || 'Parent',
+      });
+      setCreatedGuardian(result);
+      setGuardians(await api.guardians(token));
+      setGuardianEmail('');
+      setGuardianDisplayName('');
     } catch (err: unknown) {
       setError(messageOf(err));
     } finally {
@@ -285,6 +362,173 @@ export function PrivacyView({ token }: { token: string }) {
             </Typography>
           </Stack>
         </Stack>
+      </Paper>
+
+      <Paper sx={{ p: 2, mb: 2 }}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1.5 }}>
+          <Typography variant="subtitle1">Guardian accounts</Typography>
+          <Chip
+            size="small"
+            variant="outlined"
+            label={`version ${guardianAccess?.version ?? 0}`}
+          />
+        </Stack>
+        <Stack
+          direction={{ xs: 'column', md: 'row' }}
+          spacing={2}
+          sx={{ alignItems: { md: 'center' } }}
+        >
+          <FormControl size="small" sx={{ minWidth: 260 }}>
+            <InputLabel id="guardian-mode-label">Account creation</InputLabel>
+            <Select
+              labelId="guardian-mode-label"
+              label="Account creation"
+              value={guardianMode}
+              onChange={(event: SelectChangeEvent) =>
+                setGuardianMode(event.target.value as GuardianAccessMode)
+              }
+            >
+              <MenuItem value="admin_created">Admin-created (default)</MenuItem>
+              <MenuItem value="email_invite">Email invite</MenuItem>
+              <MenuItem value="magic_link">Magic link</MenuItem>
+            </Select>
+          </FormControl>
+          <Button
+            variant="contained"
+            onClick={() => void saveGuardianMode()}
+            disabled={working !== null || guardianMode === guardianAccess?.mode}
+          >
+            {working === 'guardian-mode' ? 'Saving…' : 'Save mode'}
+          </Button>
+          <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
+            {GUARDIAN_MODE_COPY[guardianMode]} The school decides; changing the mode affects new
+            accounts only.
+          </Typography>
+        </Stack>
+
+        <Typography variant="subtitle2" sx={{ mt: 3, mb: 1 }}>
+          Create or invite a guardian
+        </Typography>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+          <FormControl size="small" sx={{ minWidth: 220 }}>
+            <InputLabel id="guardian-student-label">Student</InputLabel>
+            <Select
+              labelId="guardian-student-label"
+              label="Student"
+              value={guardianStudentId}
+              onChange={(event: SelectChangeEvent) => setGuardianStudentId(event.target.value)}
+            >
+              {students.map((row) => (
+                <MenuItem key={row.id} value={row.id}>
+                  {row.lastName}, {row.firstName}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <TextField
+            size="small"
+            label="Guardian email"
+            type="email"
+            value={guardianEmail}
+            onChange={(event) => setGuardianEmail(event.target.value)}
+            sx={{ minWidth: 240 }}
+          />
+          <TextField
+            size="small"
+            label="Display name"
+            value={guardianDisplayName}
+            onChange={(event) => setGuardianDisplayName(event.target.value)}
+            sx={{ minWidth: 200 }}
+          />
+          <TextField
+            size="small"
+            label="Relationship"
+            value={guardianLinkRelationship}
+            onChange={(event) => setGuardianLinkRelationship(event.target.value)}
+            sx={{ minWidth: 160 }}
+          />
+          <Button
+            variant="contained"
+            onClick={() => void createGuardian()}
+            disabled={
+              working !== null ||
+              !guardianStudentId ||
+              !guardianEmail.trim() ||
+              !guardianDisplayName.trim()
+            }
+          >
+            {working === 'guardian'
+              ? 'Working…'
+              : guardianMode === 'email_invite'
+                ? 'Send invite'
+                : guardianMode === 'magic_link'
+                  ? 'Create magic-link account'
+                  : 'Create account'}
+          </Button>
+        </Stack>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.5 }}>
+          The account gets the parent role in this school and may sign in to consent for the linked
+          student. Linking an email that already belongs to another role is refused.
+        </Typography>
+
+        {createdGuardian && (
+          <Alert
+            severity="info"
+            sx={{ mt: 2 }}
+            onClose={() => setCreatedGuardian(null)}
+          >
+            {createdGuardian.invited ? (
+              <>Invite sent to {createdGuardian.email}.</>
+            ) : createdGuardian.temporaryPassword ? (
+              <>
+                <Typography variant="subtitle2">
+                  One-time password for {createdGuardian.email}
+                </Typography>
+                <Typography sx={{ fontFamily: 'monospace', my: 1, fontSize: '1.05rem' }}>
+                  {createdGuardian.temporaryPassword}
+                </Typography>
+                Share it securely. It is shown once and is not stored.
+              </>
+            ) : createdGuardian.mode === 'magic_link' ? (
+              <>
+                Account created for {createdGuardian.email}. The guardian signs in with an emailed
+                magic link.
+              </>
+            ) : (
+              <>
+                Existing account linked for {createdGuardian.email}. The guardian keeps their
+                current sign-in method.
+              </>
+            )}
+          </Alert>
+        )}
+
+        {guardians.length > 0 && (
+          <TableContainer sx={{ mt: 2 }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Guardian</TableCell>
+                  <TableCell>Email</TableCell>
+                  <TableCell>Student</TableCell>
+                  <TableCell>Relationship</TableCell>
+                  <TableCell>Linked</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {guardians.map((link) => (
+                  <TableRow key={link.id} hover>
+                    <TableCell>{link.displayName ?? '—'}</TableCell>
+                    <TableCell>{link.email}</TableCell>
+                    <TableCell>{link.studentName}</TableCell>
+                    <TableCell>{link.relationship}</TableCell>
+                    <TableCell>{new Date(link.createdAt).toLocaleDateString()}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
       </Paper>
 
       <Paper sx={{ p: 2, mb: 2 }}>

@@ -4,30 +4,46 @@ import type {
   DsarExport,
   ErasureCategory,
   ErasurePlan,
+  GuardianAccessMode,
+  GuardianAccessSettings,
+  GuardianAccessUpdateInput,
+  GuardianAccountResult,
+  GuardianConsentCaptureInput,
+  GuardianLink,
+  GuardianOverview,
   PrivacyConsentOverview,
   PrivacyNotice,
   PrivacyNoticeSettings,
   PrivacyNoticeUpdateInput,
 } from '@lms/shared';
-import { privacyNoticeSchema } from '@lms/shared';
+import {
+  DEFAULT_GUARDIAN_ACCESS_MODE,
+  guardianAccessModeSchema,
+  privacyNoticeSchema,
+} from '@lms/shared';
 import {
   BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, count, desc, eq, type SQL } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, type SQL } from 'drizzle-orm';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import type { AuthUser } from '../auth/auth.types';
 import { DatabaseService, type Database } from '../database/database.service';
 import * as schema from '../database/schema';
+import { SupabaseAdminService } from './supabase-admin.service';
 
 const iso = (value: Date | null) => value?.toISOString() ?? null;
 const NOTICE_KEY = 'privacy.notice';
+const GUARDIAN_ACCESS_KEY = 'privacy.guardian_access';
 
 @Injectable()
 export class PrivacyService {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly supabase: SupabaseAdminService,
+  ) {}
 
   notice(user: AuthUser): Promise<PrivacyNoticeSettings> {
     return this.database.withTenant(user.tenantId, (tx) =>
@@ -90,6 +106,75 @@ export class PrivacyService {
       });
 
       return { notice: input.notice, version, updatedAt: now.toISOString() };
+    });
+  }
+
+  guardianAccess(user: AuthUser): Promise<GuardianAccessSettings> {
+    return this.database.withTenant(user.tenantId, (tx) =>
+      this.loadGuardianAccess(tx, user.tenantId),
+    );
+  }
+
+  updateGuardianAccess(
+    user: AuthUser,
+    input: GuardianAccessUpdateInput,
+  ): Promise<GuardianAccessSettings> {
+    return this.database.withTenant(user.tenantId, async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(schema.tenantSettings)
+        .where(
+          and(
+            eq(schema.tenantSettings.tenantId, user.tenantId),
+            eq(schema.tenantSettings.key, GUARDIAN_ACCESS_KEY),
+          ),
+        )
+        .limit(1)
+        .for('update');
+
+      const currentVersion = existing?.version ?? 0;
+      if (input.version !== undefined && input.version !== currentVersion) {
+        throw new ConflictException('guardian access setting changed since it was loaded');
+      }
+
+      const previous = existing
+        ? (this.parseGuardianMode(existing.value) ?? DEFAULT_GUARDIAN_ACCESS_MODE)
+        : null;
+      const now = new Date();
+      let version: number;
+
+      if (existing) {
+        version = existing.version + 1;
+        await tx
+          .update(schema.tenantSettings)
+          .set({
+            value: { mode: input.mode },
+            version,
+            updatedBy: user.userId,
+            updatedAt: now,
+          })
+          .where(eq(schema.tenantSettings.id, existing.id));
+      } else {
+        version = 1;
+        await tx.insert(schema.tenantSettings).values({
+          tenantId: user.tenantId,
+          key: GUARDIAN_ACCESS_KEY,
+          value: { mode: input.mode },
+          version,
+          updatedBy: user.userId,
+        });
+      }
+
+      await tx.insert(schema.auditLog).values({
+        tenantId: user.tenantId,
+        actorId: user.userId,
+        action: 'privacy.guardian_access_updated',
+        entity: 'tenant_settings',
+        entityId: GUARDIAN_ACCESS_KEY,
+        metadata: { version, mode: input.mode, previousMode: previous },
+      });
+
+      return { mode: input.mode, version, updatedAt: now.toISOString() };
     });
   }
 
@@ -164,7 +249,322 @@ export class PrivacyService {
     });
   }
 
+  async guardians(user: AuthUser): Promise<GuardianLink[]> {
+    return this.database.withTenant(user.tenantId, (tx) => this.listGuardians(tx, user.tenantId));
+  }
+
+  async createGuardian(
+    user: AuthUser,
+    input: {
+      email: string;
+      displayName: string;
+      relationship: string;
+      studentId: string;
+    },
+  ): Promise<GuardianAccountResult> {
+    const email = input.email.trim().toLowerCase();
+
+    const prepared = await this.database.withTenant(user.tenantId, async (tx) => {
+      await this.loadStudent(tx, user, input.studentId);
+      const access = await this.loadGuardianAccess(tx, user.tenantId);
+
+      const [existingUser] = await tx
+        .select({ id: schema.users.id })
+        .from(schema.users)
+        .where(eq(schema.users.email, email))
+        .limit(1);
+
+      if (existingUser) {
+        const [membership] = await tx
+          .select({ role: schema.userTenants.role })
+          .from(schema.userTenants)
+          .where(
+            and(
+              eq(schema.userTenants.userId, existingUser.id),
+              eq(schema.userTenants.tenantId, user.tenantId),
+            ),
+          )
+          .limit(1);
+        if (membership && membership.role !== 'parent') {
+          throw new ConflictException(
+            'that email already belongs to a different role in this school',
+          );
+        }
+      }
+
+      return { mode: access.mode, existingUserId: existingUser?.id ?? null };
+    });
+
+    const provision = prepared.existingUserId
+      ? { userId: prepared.existingUserId, temporaryPassword: null, invited: false }
+      : await this.supabase.provisionGuardian({
+          email,
+          displayName: input.displayName,
+          mode: prepared.mode,
+        });
+
+    return this.database.withTenant(user.tenantId, async (tx) => {
+      const now = new Date();
+      await tx
+        .insert(schema.users)
+        .values({ id: provision.userId, email, displayName: input.displayName })
+        .onConflictDoUpdate({
+          target: schema.users.id,
+          set: { displayName: input.displayName, updatedAt: now },
+        });
+
+      await tx
+        .insert(schema.userTenants)
+        .values({ userId: provision.userId, tenantId: user.tenantId, role: 'parent' })
+        .onConflictDoNothing();
+
+      const [link] = await tx
+        .insert(schema.guardianStudents)
+        .values({
+          tenantId: user.tenantId,
+          guardianUserId: provision.userId,
+          studentId: input.studentId,
+          relationship: input.relationship,
+        })
+        .onConflictDoUpdate({
+          target: [
+            schema.guardianStudents.tenantId,
+            schema.guardianStudents.guardianUserId,
+            schema.guardianStudents.studentId,
+          ],
+          set: { relationship: input.relationship },
+        })
+        .returning();
+      if (!link) throw new Error('failed to link guardian');
+
+      await tx.insert(schema.auditLog).values({
+        tenantId: user.tenantId,
+        actorId: user.userId,
+        action: 'privacy.guardian_created',
+        entity: 'guardian_students',
+        entityId: link.id,
+        metadata: {
+          studentId: input.studentId,
+          mode: prepared.mode,
+          invited: provision.invited,
+          existingAccount: Boolean(prepared.existingUserId),
+        },
+      });
+
+      return {
+        guardianUserId: provision.userId,
+        email,
+        displayName: input.displayName,
+        studentId: input.studentId,
+        relationship: input.relationship,
+        mode: prepared.mode,
+        invited: provision.invited,
+        temporaryPassword: provision.temporaryPassword,
+      };
+    });
+  }
+
+  async guardianOverview(user: AuthUser): Promise<GuardianOverview> {
+    return this.database.withTenant(user.tenantId, async (tx) => {
+      const notice = await this.loadNoticeSettings(tx, user.tenantId);
+      const links = await tx
+        .select({
+          studentId: schema.guardianStudents.studentId,
+          relationship: schema.guardianStudents.relationship,
+          firstName: schema.students.firstName,
+          lastName: schema.students.lastName,
+        })
+        .from(schema.guardianStudents)
+        .innerJoin(schema.students, eq(schema.guardianStudents.studentId, schema.students.id))
+        .where(
+          and(
+            eq(schema.guardianStudents.tenantId, user.tenantId),
+            eq(schema.guardianStudents.guardianUserId, user.userId),
+          ),
+        )
+        .orderBy(schema.students.lastName, schema.students.firstName);
+
+      const studentIds = links.map((link) => link.studentId);
+      const consents = studentIds.length
+        ? await tx
+            .select({
+              studentId: schema.consentRecords.studentId,
+              status: schema.consentRecords.status,
+              noticeVersion: schema.consentRecords.noticeVersion,
+              capturedAt: schema.consentRecords.capturedAt,
+            })
+            .from(schema.consentRecords)
+            .where(
+              and(
+                eq(schema.consentRecords.tenantId, user.tenantId),
+                inArray(schema.consentRecords.studentId, studentIds),
+              ),
+            )
+            .orderBy(desc(schema.consentRecords.capturedAt))
+        : [];
+
+      const latest = new Map<string, (typeof consents)[number]>();
+      for (const consent of consents) {
+        if (!latest.has(consent.studentId)) latest.set(consent.studentId, consent);
+      }
+
+      return {
+        notice,
+        students: links.map((link) => {
+          const consent = latest.get(link.studentId);
+          return {
+            studentId: link.studentId,
+            firstName: link.firstName,
+            lastName: link.lastName,
+            relationship: link.relationship,
+            consentStatus: consent?.status ?? null,
+            consentNoticeVersion: consent?.noticeVersion ?? null,
+            consentAt: iso(consent?.capturedAt ?? null),
+          };
+        }),
+      };
+    });
+  }
+
+  captureGuardianConsent(
+    user: AuthUser,
+    studentId: string,
+    input: GuardianConsentCaptureInput,
+  ): Promise<ConsentRecord> {
+    return this.database.withTenant(user.tenantId, async (tx) => {
+      const [link] = await tx
+        .select({ relationship: schema.guardianStudents.relationship })
+        .from(schema.guardianStudents)
+        .where(
+          and(
+            eq(schema.guardianStudents.tenantId, user.tenantId),
+            eq(schema.guardianStudents.guardianUserId, user.userId),
+            eq(schema.guardianStudents.studentId, studentId),
+          ),
+        )
+        .limit(1);
+      if (!link) throw new NotFoundException('student not found');
+
+      const settings = await this.loadNoticeSettings(tx, user.tenantId);
+      if (!settings.notice) {
+        throw new BadRequestException('the school has not published a privacy notice yet');
+      }
+
+      const [student] = await tx
+        .select({ firstName: schema.students.firstName, lastName: schema.students.lastName })
+        .from(schema.students)
+        .where(
+          and(eq(schema.students.tenantId, user.tenantId), eq(schema.students.id, studentId)),
+        )
+        .limit(1);
+      const [actor] = await tx
+        .select({ displayName: schema.users.displayName, email: schema.users.email })
+        .from(schema.users)
+        .where(eq(schema.users.id, user.userId))
+        .limit(1);
+
+      const [row] = await tx
+        .insert(schema.consentRecords)
+        .values({
+          tenantId: user.tenantId,
+          studentId,
+          noticeVersion: settings.version,
+          status: input.status,
+          guardianName: actor?.displayName ?? actor?.email ?? 'Guardian',
+          guardianRelationship: link.relationship,
+          guardianContact: actor?.email ?? user.email ?? null,
+          note: input.note ?? null,
+          capturedBy: user.userId,
+        })
+        .returning();
+      if (!row) throw new Error('failed to record consent');
+
+      await tx.insert(schema.auditLog).values({
+        tenantId: user.tenantId,
+        actorId: user.userId,
+        action: 'privacy.consent_recorded',
+        entity: 'student',
+        entityId: studentId,
+        metadata: { status: input.status, noticeVersion: settings.version, selfService: true },
+      });
+
+      return {
+        id: row.id,
+        studentId,
+        studentName: student ? `${student.lastName}, ${student.firstName}` : studentId,
+        guardianName: row.guardianName,
+        guardianRelationship: row.guardianRelationship,
+        guardianContact: row.guardianContact,
+        status: row.status,
+        noticeVersion: row.noticeVersion,
+        note: row.note,
+        capturedAt: row.capturedAt.toISOString(),
+        capturedByName: actor?.displayName ?? actor?.email ?? null,
+      };
+    });
+  }
+
+  private async listGuardians(tx: Database, tenantId: string): Promise<GuardianLink[]> {
+    const rows = await tx
+      .select({
+        id: schema.guardianStudents.id,
+        guardianUserId: schema.guardianStudents.guardianUserId,
+        email: schema.users.email,
+        displayName: schema.users.displayName,
+        studentId: schema.guardianStudents.studentId,
+        firstName: schema.students.firstName,
+        lastName: schema.students.lastName,
+        relationship: schema.guardianStudents.relationship,
+        createdAt: schema.guardianStudents.createdAt,
+      })
+      .from(schema.guardianStudents)
+      .innerJoin(schema.users, eq(schema.guardianStudents.guardianUserId, schema.users.id))
+      .innerJoin(schema.students, eq(schema.guardianStudents.studentId, schema.students.id))
+      .where(eq(schema.guardianStudents.tenantId, tenantId))
+      .orderBy(desc(schema.guardianStudents.createdAt))
+      .limit(500);
+
+    return rows.map((row) => ({
+      id: row.id,
+      guardianUserId: row.guardianUserId,
+      email: row.email,
+      displayName: row.displayName,
+      studentId: row.studentId,
+      studentName: `${row.lastName}, ${row.firstName}`,
+      relationship: row.relationship,
+      createdAt: row.createdAt.toISOString(),
+    }));
+  }
+
+  private async loadGuardianAccess(
+    tx: Database,
+    tenantId: string,
+  ): Promise<GuardianAccessSettings> {
+    const [row] = await tx
+      .select()
+      .from(schema.tenantSettings)
+      .where(
+        and(
+          eq(schema.tenantSettings.tenantId, tenantId),
+          eq(schema.tenantSettings.key, GUARDIAN_ACCESS_KEY),
+        ),
+      )
+      .limit(1);
+
+    return {
+      mode: (row ? this.parseGuardianMode(row.value) : null) ?? DEFAULT_GUARDIAN_ACCESS_MODE,
+      version: row?.version ?? 0,
+      updatedAt: iso(row?.updatedAt ?? null),
+    };
+  }
+
+  private parseGuardianMode(value: Record<string, unknown>): GuardianAccessMode | null {
+    const parsed = guardianAccessModeSchema.safeParse(value.mode);
+    return parsed.success ? parsed.data : null;
+  }
+
   private async loadNoticeSettings(tx: Database, tenantId: string): Promise<PrivacyNoticeSettings> {
+
     const [row] = await tx
       .select()
       .from(schema.tenantSettings)

@@ -1,8 +1,12 @@
 import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
 import {
   consentCaptureSchema,
+  guardianAccessUpdateSchema,
+  guardianCreateSchema,
   privacyNoticeUpdateSchema,
   type ConsentCaptureInput,
+  type GuardianAccessUpdateInput,
+  type GuardianCreateInput,
   type PrivacyNoticeUpdateInput,
 } from '@lms/shared';
 import { z } from 'zod';
@@ -57,5 +61,35 @@ export class PrivacyController {
   @Roles('school_admin')
   erasureDryRun(@CurrentUser() user: AuthUser, @Param('studentId', idPipe) studentId: string) {
     return this.privacy.erasureDryRun(user, studentId);
+  }
+
+  @Get('guardian-access')
+  @Roles('school_admin')
+  guardianAccess(@CurrentUser() user: AuthUser) {
+    return this.privacy.guardianAccess(user);
+  }
+
+  @Put('guardian-access')
+  @Roles('school_admin')
+  updateGuardianAccess(
+    @CurrentUser() user: AuthUser,
+    @Body(new ZodValidationPipe(guardianAccessUpdateSchema)) input: GuardianAccessUpdateInput,
+  ) {
+    return this.privacy.updateGuardianAccess(user, input);
+  }
+
+  @Get('guardians')
+  @Roles('school_admin')
+  guardians(@CurrentUser() user: AuthUser) {
+    return this.privacy.guardians(user);
+  }
+
+  @Post('guardians')
+  @Roles('school_admin')
+  createGuardian(
+    @CurrentUser() user: AuthUser,
+    @Body(new ZodValidationPipe(guardianCreateSchema)) input: GuardianCreateInput,
+  ) {
+    return this.privacy.createGuardian(user, input);
   }
 }

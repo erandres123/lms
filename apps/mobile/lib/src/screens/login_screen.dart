@@ -14,6 +14,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _password = TextEditingController();
   bool _busy = false;
   String? _error;
+  String? _linkSentTo;
 
   @override
   void dispose() {
@@ -26,12 +27,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() {
       _busy = true;
       _error = null;
+      _linkSentTo = null;
     });
     try {
       await Supabase.instance.client.auth.signInWithPassword(
         email: _email.text.trim(),
         password: _password.text,
       );
+    } on AuthException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _sendMagicLink() async {
+    final email = _email.text.trim();
+    if (email.isEmpty) {
+      setState(() => _error = 'Enter your email first.');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+      _linkSentTo = null;
+    });
+    try {
+      await Supabase.instance.client.auth.signInWithOtp(email: email);
+      if (mounted) setState(() => _linkSentTo = email);
     } on AuthException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } finally {
@@ -80,6 +103,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     const SizedBox(height: 16),
                     Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
                   ],
+                  if (_linkSentTo != null) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      'Check $_linkSentTo for a sign-in link.',
+                      style: TextStyle(color: theme.colorScheme.primary),
+                    ),
+                  ],
                   const SizedBox(height: 24),
                   FilledButton(
                     onPressed: _busy ? null : _signIn,
@@ -89,6 +119,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Text('Sign in'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: _busy ? null : _sendMagicLink,
+                    child: const Text('Email me a sign-in link instead'),
                   ),
                 ],
               ),

@@ -20,6 +20,7 @@ export const envSchema = z
     RETENTION_SCHEDULER: z.enum(['on', 'off']).default('on'),
     SUPABASE_URL: z.preprocess(emptyToUndefined, z.string().url().optional()),
     SUPABASE_JWT_SECRET: z.preprocess(emptyToUndefined, z.string().min(32).optional()),
+    SUPABASE_SERVICE_ROLE_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
     SUPABASE_JWT_AUDIENCE: z.string().min(1).default('authenticated'),
     LIVEKIT_URL: z.preprocess(emptyToUndefined, z.string().url().optional()),
     LIVEKIT_API_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
